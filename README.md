@@ -65,3 +65,20 @@ This repository is a **functional MVP**, not an audited or publicly launched cry
 Validate ZENQORY and ZNQY availability, brand rights and domains before promoting the platform. Do not imply the points have any guaranteed cash value or future token exchange rate.
 
 References: https://vercel.com/docs/frameworks/backend/fastapi • https://core.telegram.org/bots/webapps • https://docs.ton.org/ecosystem/ton-connect
+
+
+## ✨ Cyber Upgrade V2 — 26 October 2026
+
+The interface now has five connected cyber command screens with **25 CSS keyframe animations** and a refined, compact mobile layout.
+
+- **Home:** animated ZNQY coin and orbital fields, glowing HUD corner brackets, 8-hour farming chamber, real cycle/progress telemetry, user-only activity feed and smaller mission cards.
+- **Earn:** holographic mission channels, responsive energy wave, actual completed-mission state, animated progress and mission-ready cards.
+- **Friends:** neon network topology, circuit graphics and referral counts derived from registered users rather than invented leaderboards.
+- **Wallet:** luminous digital vault, off-chain reward ledger, activity and secure-by-design future TON wallet placeholder. Deposits and withdrawals remain unavailable.
+- **Profile:** futuristic identity console, progress-to-next-explorer-level rail and visibly locked/unlocked badges based on actual completed activities.
+- **Global:** original cyber-circuit SVG, ambient grid, teal-green glows, small-screen spacing, HUD glass panels, active navigation illumination, mobile-friendly performance with a reduced-motion override.
+
+The feed shows only the signed-in user's actual recorded reward activity (device-local for preview users). It never fabricates trades, token prices, investment returns, live blockchain status or user transactions.
+
+**Update delivery:** Commit changes in GitHub to trigger Vercel Git integrations. If the website still shows the old version, check the crypto project's most recent Vercel build status, then reload the app.
+
