@@ -8,3 +8,149 @@
 .wallet-hero{background-image:linear-gradient(100deg,#071c10e8,#084f286b),url("/hero-art.svg");background-size:cover;background-position:center}
 .demo-fast{display:block;width:100%;margin-top:11px;background:transparent;border:1px dashed #477e50;border-radius:10px;padding:9px;font:600 10px var(--display);color:#8ebf99;letter-spacing:.6px}
 .demo-fast:hover{background:#163b2244}
+
+
+/* ===============================================================
+ ZENQORY NEXT — compact cinematic technology system (2026)
+ Intentional mobile-first refinements across all five views.
+ =============================================================== */
+:root{
+ --lime:#79ff94;--acid:#adff71;--lime-soft:#d1ffd6;
+ --tech-line:rgba(102,255,153,.26);
+ --tech-glow:0 0 15px rgba(49,255,110,.16),inset 0 1px 0 rgba(146,255,180,.12);
+}
+html{overscroll-behavior-y:contain}
+body{background:radial-gradient(ellipse at 50% -10%,#0c3020 0%,transparent 42%),#030605}
+body:before{content:"";position:fixed;z-index:0;inset:0;pointer-events:none;
+ background-image:linear-gradient(90deg,rgba(83,255,132,.033) 1px,transparent 1px),linear-gradient(rgba(83,255,132,.026) 1px,transparent 1px);
+ background-size:44px 44px;mask-image:linear-gradient(180deg,transparent,#000 21%,#000 80%,transparent);
+ animation:zen-grid-drift 30s linear infinite}
+.app-shell{padding:0 12px 82px;background:
+ radial-gradient(circle at 92% 18%,rgba(45,255,118,.067),transparent 30%),
+ radial-gradient(circle at 5% 70%,rgba(24,240,120,.044),transparent 22%),
+ linear-gradient(165deg,#030806,#010503 87%);
+}
+.app-shell:after{animation:zen-ambient 11s ease-in-out infinite alternate;opacity:.7}
+.ambient-grid{opacity:.28;background-size:58px 58px;animation:zen-grid-drift 36s linear infinite}
+.topbar{height:70px;padding:10px 2px 8px;gap:5px}
+.avatar-wrap{min-width:74px;gap:5px}
+.avatar-face{height:32px;flex-basis:32px;font-size:17px;box-shadow:0 0 16px #51ff7850,inset 0 0 8px #7dff8747}
+.avatar-level strong{font-size:10px}.avatar-level small{font-size:8px}
+.wordmark{gap:3px}.brand-sign{width:35px;height:35px;font-size:28px;filter:drop-shadow(0 0 6px #50ff8d)}
+.brand-text strong{font-size:clamp(14px,4.3vw,18px);letter-spacing:1.65px}
+.brand-text small{font-size:6px;letter-spacing:1.25px}
+.header-actions{gap:5px}.icon-circle{width:31px;height:31px}.icon-circle svg{width:15px;height:15px}
+.preview-strip{margin:0 0 9px;padding:6px 7px;font-size:8px;letter-spacing:0;border-radius:8px;gap:4px;white-space:normal}
+.hero,.farm-card,.quick-card,.mission-item,.asset-panel,.setting-item,.wallet-action,.network-panel,.security-panel,.referral-explainer,.stat-strip,.profile-cover{
+ box-shadow:var(--tech-glow);border-color:rgba(124,255,156,.28)
+}
+.hero,.farm-card{isolation:isolate}
+.hero:before{animation:zen-stars 9s ease-in-out infinite alternate;opacity:.53}
+.hero{border-radius:16px}
+.balance-hero{min-height:181px;padding:17px 14px;background-image:linear-gradient(90deg,rgba(4,17,9,.92) 1%,rgba(5,23,11,.83) 36%,rgba(5,25,11,.24) 94%),url("/hero-art.svg");background-size:cover;background-position:58% 50%}
+.hero-copy{max-width:58%}.overline{font-size:9px;letter-spacing:1.3px;line-height:1.35}
+.hero-number{font-size:clamp(36px,10.2vw,47px);margin:10px 0 0;letter-spacing:-1.8px;text-shadow:0 0 18px rgba(105,255,146,.46)}
+.balance-unit{font-size:14px}.balance-unit span{font-size:13px}
+.hero-mini-chip{margin-top:12px;padding:7px 8px;font-size:8px;box-shadow:0 0 13px #3eff6826;white-space:nowrap}
+.orb-scene{right:-12px;top:0;transform:rotate(-17deg) scale(.80);transform-origin:top right;animation:zen-orb-drift 6.5s ease-in-out infinite}
+.coin-3d{background:radial-gradient(circle at 33% 23%,#568d6e,#0c3020 45%,#030c08 75%);
+ border:8px ridge #69ffa0;box-shadow:0 0 0 4px #0f5f35,0 0 0 7px #73ffa888,0 0 30px 9px #00ef537c,inset 0 0 29px #5fffa677,14px 14px 0 #032315;
+ animation:zen-coin-energy 3.8s ease-in-out infinite}
+.coin-3d span{text-shadow:0 0 6px #c8ffe0,0 0 24px #3cff85;animation:zen-z-light 3.8s ease-in-out infinite}
+.orbit-a{animation:zen-orbit-a 18s linear infinite}.orbit-b{animation:zen-orbit-b 25s linear infinite}
+.shard{animation:zen-crystal-float 5.7s ease-in-out infinite alternate;filter:drop-shadow(0 0 8px #31ff7782)}
+.shard-b{animation-delay:-1.8s}.shard-c{animation-delay:-3.2s}
+.hero-floor{height:44px}
+.farm-card{margin-top:10px;padding:13px 13px 12px;border-radius:16px;
+ background-image:linear-gradient(90deg,rgba(6,17,10,.95) 0%,rgba(9,24,14,.87) 57%,rgba(7,25,13,.53) 100%),url("/farm-art.svg");
+ background-size:cover;background-position:center 57%;background-color:#09170f;
+}
+.farm-card:after{right:-9px;top:20px;width:87px;height:110px;opacity:.16;background:repeating-linear-gradient(125deg,transparent 0 9px,#76ffaa 10px 11px,transparent 12px 20px);animation:zen-scan 7s ease-in-out infinite}
+.farm-card:before{content:"";position:absolute;z-index:0;inset:0;pointer-events:none;background:linear-gradient(112deg,transparent 31%,rgba(134,255,160,.045) 47%,transparent 59%);transform:translateX(-90%);animation:zen-card-sweep 12s linear infinite}
+.farm-card>*{position:relative;z-index:1}
+.section-title-inline{gap:8px}.section-title-inline h2{font-size:14px;margin-bottom:3px}.section-title-inline p{font-size:9px}
+.icon-tile{width:36px;height:36px;flex-basis:36px;border-radius:10px}.icon-tile svg{width:19px;height:19px}
+.tiny-tag{font-size:8px;padding:5px 7px}
+.farm-core{gap:12px;margin:13px 0 11px}
+.radial-progress{width:74px;height:74px;flex-basis:74px;border-width:1px;box-shadow:0 0 15px #43ff7675,inset 0 0 16px #37ff7422;animation:zen-arc-shimmer 4s ease-in-out infinite}
+.radial-inner{width:57px;height:57px}.radial-glyph{font-size:40px}
+.farm-meta strong{font-size:clamp(25px,7vw,31px);margin:2px 0 6px;letter-spacing:-1.1px}
+.progress-label{font-size:8px;margin-bottom:6px}.progress-track{height:6px}.progress-fill{box-shadow:0 0 11px #52ff8e;position:relative;overflow:hidden}
+.progress-fill:after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 22%,rgba(255,255,255,.6) 46%,transparent 70%);transform:translateX(-100%);animation:zen-progress-shine 3.5s linear infinite}
+.action-main{min-height:43px;padding:10px 12px;font-size:12px;letter-spacing:.2px;border-radius:11px;box-shadow:0 0 16px rgba(109,255,128,.43),inset 0 2px 0 #e4ffc1;overflow:hidden}
+.action-main:not(:disabled):before{content:"";position:absolute;top:-30%;bottom:-30%;left:-60%;width:42%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-22deg);animation:zen-button-flash 4.5s ease-in-out infinite;pointer-events:none}
+.action-main:disabled{background:#17291e;border-color:#355240;color:#8f9e93;box-shadow:inset 0 0 10px #1d3a29}
+.action-main svg{width:17px;height:17px}.farm-footer{margin-top:9px;font-size:9px;gap:7px}.farm-footer svg{width:12px;height:12px}
+.demo-fast{font-size:9px;padding:6px;margin-top:7px;border-radius:8px;min-height:27px}
+.dashboard-heading{margin:17px 3px 9px}.dashboard-heading h3{font-size:10px;letter-spacing:1.45px}.dashboard-heading .small{font-size:9px}
+.quick-grid{gap:8px}.quick-card{min-height:127px;border-radius:13px;padding:10px}
+.quick-icon{width:33px;height:33px;flex-basis:33px;border-radius:9px}.quick-icon svg{width:19px;height:19px}
+.quick-card-arrow{right:9px;top:15px}.quick-card-arrow svg{width:14px;height:14px}
+.quick-card strong{font-size:12px;margin-top:8px}.quick-card small{font-size:9px;line-height:1.3;min-height:23px;margin-top:3px}
+.mini-status{font-size:8px;letter-spacing:0;padding:6px;border-radius:8px}
+.quick-card:after,.mission-item:after,.setting-item:after{content:"";position:absolute;pointer-events:none;inset:0;border-radius:inherit;background:linear-gradient(110deg,transparent 18%,rgba(135,255,154,.11) 49%,transparent 73%);transform:translateX(-140%);opacity:.6}
+.quick-card:hover:after,.quick-card:focus-visible:after,.mission-item:focus-within:after,.setting-item:focus-visible:after{animation:zen-card-sweep 1.9s ease-out 1}
+.quick-card:hover,.setting-item:hover,.wallet-action:hover,.mission-item:focus-within{border-color:rgba(145,255,176,.65);box-shadow:0 0 19px #3dff7c3d,inset 0 1px 0 #bdffbc2e}
+.wide-promo{min-height:116px;padding:13px;margin-top:9px;border-radius:14px}
+.promo-copy h3{font-size:18px;margin:6px 0 5px}.promo-copy p{font-size:9px}.promo-link{margin-top:9px;font-size:8px}
+.vault-object{width:90px;height:90px;top:16px;right:23px}.vault-hex{font-size:56px}
+.bottom-nav{padding:8px 4px calc(8px + env(safe-area-inset-bottom));border-radius:15px 15px 0 0;background:linear-gradient(180deg,rgba(14,28,19,.97),rgba(3,8,5,.98))}
+.nav-item{gap:3px;font-size:10px;padding:2px 0}.nav-item svg{width:21px;height:21px}
+.nav-item.active svg{animation:zen-nav-neon 3s ease-in-out infinite}
+.page-heading{padding:5px 2px 13px}.page-heading h1{font-size:clamp(27px,7.6vw,33px);margin:8px 0 6px}.page-heading p{font-size:11px}.eyebrow{font-size:9px}
+.mission-hero{min-height:145px;padding:14px 15px;background-image:linear-gradient(100deg,rgba(5,19,11,.90),rgba(6,42,19,.46)),url("/hero-art.svg")}
+.mission-big{font-size:35px;margin:4px 0 0}.mission-big span:last-child{font-size:17px}.mission-hero h2{font-size:12px;margin-bottom:9px}.hero-footnote{font-size:8px;margin-top:9px}
+.stat-strip{padding:10px 4px;margin-top:10px;border-radius:13px}.stat-strip svg{width:18px;height:18px}.stat-strip strong{font-size:16px}.stat-strip span{font-size:7px}
+.mission-list{gap:7px}.mission-item{padding:10px;gap:9px;border-radius:12px}.mission-icon{height:34px;width:34px;flex-basis:34px;border-radius:9px}.mission-icon svg{height:18px;width:18px}
+.mission-info{gap:3px}.mission-info strong{font-size:12px}.mission-info small{font-size:9px}.mission-info em{font-size:10px}.mission-btn{font-size:9px;padding:9px 10px;border-radius:9px}
+.premium-note,.referral-explainer,.security-panel{margin-top:11px;padding:11px;border-radius:12px}
+.boost-grid{gap:8px}.booster{padding:11px;min-height:135px;border-radius:12px}.booster strong{font-size:12px;margin-top:7px}.booster p{font-size:9px}
+.referral-hero{min-height:266px;padding:16px 14px;background-image:linear-gradient(95deg,rgba(4,16,9,.93),rgba(3,31,15,.42)),url("/hero-art.svg")}
+.referral-hero h2{font-size:21px;margin:23px 0 7px}.referral-hero p{font-size:10px;margin-bottom:12px}
+.network-art{right:-9px;top:-7px;transform:scale(.85);transform-origin:top right;animation:zen-ambient 5s ease-in-out infinite alternate}
+.referral-field{margin-bottom:10px;padding:5px 6px 5px 10px}.referral-field span{font-size:11px}.network-panel{padding:14px}
+.wallet-hero{min-height:185px;padding:22px 17px;background-image:linear-gradient(100deg,rgba(4,17,10,.90),rgba(4,37,15,.38)),url("/hero-art.svg")}
+.wallet-number{font-size:clamp(36px,9.7vw,46px);margin:11px 0 0}.wallet-caution{margin-top:13px;font-size:9px}
+.orb-mini{width:76px;height:76px;font-size:52px}
+.wallet-actions{gap:7px;margin-top:10px}.wallet-action{padding:9px 3px;border-radius:12px}.wallet-action>span{padding:6px;border-radius:9px}.wallet-action svg{width:18px;height:18px}.wallet-action strong{font-size:10px}.wallet-action small{font-size:8px}
+.asset-panel{padding:11px}.asset-symbol{width:39px;height:39px;flex-basis:39px;font-size:27px}.asset-right strong{font-size:13px}.asset-panel strong{font-size:11px}
+.activity-item,.activity-empty{padding:10px 11px}.profile-cover{min-height:213px;padding:17px 12px 14px;border-radius:15px;background-image:linear-gradient(120deg,rgba(4,27,10,.85),rgba(4,27,10,.52)),url("/hero-art.svg");background-size:cover;background-position:center}
+.large-avatar{height:63px;width:63px;margin-bottom:10px}.large-avatar span{font-size:36px}
+.profile-heading h1{font-size:21px}.profile-badge{font-size:8px;padding:6px 10px}.profile-heading p{font-size:8px}
+.profile-stat-grid{padding:12px 0;margin-top:9px;border-radius:12px}.profile-stat-grid strong{font-size:15px}
+.settings-list{gap:7px}.setting-item{padding:9px 11px;border-radius:11px;gap:9px}
+.setting-symbol{width:33px;height:33px;flex-basis:33px;border-radius:8px}.setting-symbol svg{width:17px;height:17px}
+.setting-item strong{font-size:11px}.setting-item small{font-size:9px}.achievement-row{gap:7px}
+.achievement-row>div{padding:10px 2px;border-radius:10px}.achievement-row>div>span{width:33px;height:33px}.achievement-row strong{font-size:8px}
+.app-version{margin-top:14px;padding:11px;border-radius:11px}
+.screen.active > .hero,.screen.active > .farm-card,.screen.active > .page-heading,.screen.active > .profile-cover{animation:zen-view-enter .55s cubic-bezier(.2,.7,.2,1) both}
+.screen.active .quick-card,.screen.active .mission-item,.screen.active .setting-item,.screen.active .wallet-action{animation:zen-tile-enter .5s both}
+.screen.active .quick-card:nth-child(2),.screen.active .mission-item:nth-child(2),.screen.active .setting-item:nth-child(2){animation-delay:.06s}
+.screen.active .quick-card:nth-child(3),.screen.active .mission-item:nth-child(3),.screen.active .setting-item:nth-child(3){animation-delay:.11s}
+.screen.active .quick-card:nth-child(4),.screen.active .setting-item:nth-child(4){animation-delay:.15s}
+@keyframes zen-grid-drift{to{background-position:0 44px}}
+@keyframes zen-ambient{0%{opacity:.45;filter:hue-rotate(0)}100%{opacity:.84;filter:hue-rotate(7deg)}}
+@keyframes zen-stars{0%{opacity:.34}100%{opacity:.69}}
+@keyframes zen-orb-drift{0%,100%{transform:rotate(-17deg) scale(.80) translateY(0)}50%{transform:rotate(-15deg) scale(.80) translateY(-8px)}}
+@keyframes zen-coin-energy{0%,100%{filter:brightness(.96);box-shadow:0 0 0 4px #0f5f35,0 0 0 7px #73ffa888,0 0 30px 9px #00ef537c,inset 0 0 29px #5fffa677,14px 14px 0 #032315}50%{filter:brightness(1.12);box-shadow:0 0 0 4px #0f5f35,0 0 0 7px #73ffa8a0,0 0 39px 14px #00ef5392,inset 0 0 37px #5fffa68b,14px 14px 0 #032315}}
+@keyframes zen-z-light{0%,100%{opacity:.85}50%{opacity:1}}
+@keyframes zen-orbit-a{to{transform:rotate(335deg) scaleY(.39)}}
+@keyframes zen-orbit-b{to{transform:rotate(-328deg) scaleY(.55)}}
+@keyframes zen-crystal-float{to{transform:translateY(-12px) rotate(7deg)}}
+@keyframes zen-arc-shimmer{0%,100%{filter:brightness(.97)}50%{filter:brightness(1.18)}}
+@keyframes zen-scan{0%,100%{transform:translateX(-8px) skewX(-20deg)}50%{transform:translateX(9px) skewX(-20deg)}}
+@keyframes zen-card-sweep{to{transform:translateX(240%)}}
+@keyframes zen-progress-shine{to{transform:translateX(170%)}}
+@keyframes zen-button-flash{0%,50%{left:-60%}80%,100%{left:160%}}
+@keyframes zen-nav-neon{0%,100%{filter:drop-shadow(0 0 4px #6bff7da9)}50%{filter:drop-shadow(0 0 12px #6bff7d)}}
+@keyframes zen-view-enter{from{opacity:.65;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@keyframes zen-tile-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:385px){
+ .app-shell{padding-left:10px;padding-right:10px}.topbar{height:66px}.brand-sign{width:29px;font-size:25px}.brand-text strong{font-size:14px;letter-spacing:1px}.brand-text small{letter-spacing:.9px;font-size:5.5px}.avatar-wrap{min-width:66px}.avatar-face{height:29px;flex-basis:29px}.icon-circle{width:29px;height:29px}
+ .balance-hero{min-height:166px;padding:14px 12px}.hero-number{font-size:34px}.hero-mini-chip{font-size:7px}.orb-scene{right:-20px;top:-6px}
+ .farm-card{padding:11px}.farm-core{gap:9px;margin:11px 0}.radial-progress{width:68px;height:68px;flex-basis:68px}.radial-inner{width:52px;height:52px}.radial-glyph{font-size:36px}.farm-meta strong{font-size:24px}.section-title-inline h2{font-size:13px}.quick-card{padding:9px;min-height:119px}
+ .referral-hero h2{font-size:19px}.referral-hero{min-height:253px}
+}
+@media(prefers-reduced-motion:reduce){
+ body:before,.ambient-grid,.app-shell:after,.hero:before,.orb-scene,.coin-3d,.coin-3d span,.orbit-a,.orbit-b,.shard,.farm-card:after,.farm-card:before,.radial-progress,.progress-fill:after,.action-main:before,.nav-item.active svg,.screen.active>.hero,.screen.active>.farm-card,.screen.active>.page-heading,.screen.active>.profile-cover,.screen.active .quick-card,.screen.active .mission-item,.screen.active .setting-item,.screen.active .wallet-action{animation:none!important}
+}
