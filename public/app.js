@@ -43,7 +43,7 @@ $("mission-list").innerHTML=html;$("mission-done").textContent=count;$("mission-
 function renderActivity(){var entries=state.history||[];var box=$("activity-list");if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
 function renderCyber(){
   $("session-status").textContent=DEMO?"PREVIEW • LOCAL ONLY":"TELEGRAM SESSION";
-  $("network-spectrum-count").textContent=fmt(state.refCount)+" VERIFIED FRIEND"+(state.refCount===1?"":"S");
+  $("network-spectrum-count").textContent=fmt(state.refCount)+" INVITED FRIEND"+(state.refCount===1?"":"S");
   $("profile-code").textContent=DEMO?"PREVIEW":String(state.id||"").slice(-6);
   var count=Math.max(0,Number(state.farmCount)||0),stage=count%5,percentage=100*stage/5;
   $("rank-goal").textContent=stage+" / 5 CYCLES";
