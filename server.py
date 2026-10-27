@@ -440,14 +440,13 @@ async def telegram_webhook(request: Request,
     if command in ("/start", "/app", "start", "open zenqory"):
         first_name = str((message.get("from") or {}).get("first_name") or "Explorer")[:40]
         greeting = (
-            "💚 Welcome to ZENQORY, " + first_name + "!\n\n"
-            "🚀 Your digital rewards journey starts here.\n\n"
-            "🪙 Start an 8-hour farming cycle\n"
-            "🎯 Complete reward missions\n"
-            "👥 Invite your friends\n"
-            "💎 Track your ZNQY pre-launch points\n\n"
-            "👇 Tap the button below to launch ZENQORY.\n\n"
-            "ℹ️ Rewards are currently pre-launch points, not tradeable cryptocurrency."
+            "Hey " + first_name + "! 💚 Welcome to ZENQORY.\n\n"
+            "Your space to farm points, unlock missions and grow with friends. ✨\n\n"
+            "🪙 Start an 8-hour farming cycle, then claim your points.\n"
+            "🎯 Complete missions and discover new rewards.\n"
+            "👥 Bring friends into the ZENQORY community.\n\n"
+            "Ready to explore? Tap Launch ZENQORY below. 🚀\n\n"
+            "ZNQY points are pre-launch rewards, not tradeable tokens."
         )
     elif command in ("/channel", "/join"):
         greeting = (
