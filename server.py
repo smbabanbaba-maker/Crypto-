@@ -372,6 +372,21 @@ def _setup_telegram_bot() -> dict:
     return {"ok": True, "webhook": "configured", "menu": "configured"}
 
 
+@app.post("/api/telegram/verify", include_in_schema=False)
+def telegram_verify(x_telegram_init_data: str = Header(default="")):
+    """Verify Telegram launch credentials independently of rewards/database.
+
+    A verified Mini App session is not a claim that the points database is live.
+    Do not disclose raw initData, bot tokens or third-party secrets.
+    """
+    person = telegram_identity(x_telegram_init_data)
+    return {
+        "verified": True,
+        "first_name": person["first_name"],
+        "rewards_mode": "live" if os.environ.get("DATABASE_URL") else "local_preview",
+    }
+
+
 @app.post("/api/telegram/activate", include_in_schema=False)
 def activate_telegram(x_telegram_init_data: str = Header(default="")):
     """Secure one-time setup after launch from the actual Telegram Mini App."""
@@ -412,7 +427,7 @@ async def telegram_webhook(request: Request,
     if command in ("/start", "/app", "start", "open zenqory"):
         first_name = str((message.get("from") or {}).get("first_name") or "Explorer")[:40]
         greeting = (
-            "💚 Barka da zuwa ZENQORY, " + first_name + "!\n\n"
+            "💚 Welcome to ZENQORY, " + first_name + "!\n\n"
             "🚀 Your digital rewards journey starts here.\n\n"
             "🪙 Start an 8-hour farming cycle\n"
             "🎯 Complete reward missions\n"
