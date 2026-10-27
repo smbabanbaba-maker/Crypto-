@@ -82,3 +82,18 @@ The feed shows only the signed-in user's actual recorded reward activity (device
 
 **Update delivery:** Commit changes in GitHub to trigger Vercel Git integrations. If the website still shows the old version, check the crypto project's most recent Vercel build status, then reload the app.
 
+
+
+## Telegram bot setup — before the database
+
+ZENQORY has a FastAPI Telegram webhook at POST /api/telegram/webhook; it answers /start, /app, /help and /status with an inline **Launch ZENQORY** Mini App button. It also supports other text with a simple navigation response. The bot handler does not depend on PostgreSQL.
+
+**Required owner-only Vercel step:** Add a sensitive production environment variable BOT_TOKEN (from BotFather) in Vercel → crypto → Settings → Environment Variables. **Never put the token in GitHub, chat, public URLs or screenshots.** Redeploy production after adding it.
+
+In BotFather, configure /setmenubutton on the bot with URL https://crypto-jade-nine.vercel.app and title "Open ZENQORY". Open the Mini App **from the Telegram bot chat** once. The frontend sends the signed Telegram initData to POST /api/telegram/activate; the server verifies the Telegram HMAC using BOT_TOKEN, registers the fixed HTTPS webhook with a derived secret, and sets menu button and commands. This is automatic after token setup, no manual API URL with the token needed.
+
+Once the Mini App has opened from Telegram, send /start again in the bot chat to see the welcome and Launch button. The profile's "Launch App" and bot-menu appearance are Telegram/BotFather settings, not only website settings.
+
+Public, non-secret diagnostic endpoint: GET /api/telegram/status. It reports whether BOT_TOKEN is configured, without showing any credential. If BOT_TOKEN is missing, Telegram bot replies cannot activate; the website still works in local preview mode without a database. Preview points are device-local, not actual server balances.
+
+**Security:** Telegram webhook requests require the correct X-Telegram-Bot-Api-Secret-Token. The activation endpoint requires cryptographically verified Telegram Mini App initData, and registers only the fixed ZENQORY domain. Live reward APIs still require signed identities and PostgreSQL.
