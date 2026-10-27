@@ -39,6 +39,7 @@ $("farm-timer").textContent=begin===null?"08:00:00":ready?"00:00:00":clock(FARM_
 $("farm-caption").textContent=begin===null?"AWAITING ACTIVATION":ready?"REWARD READY":"FARMING PROTOCOL ACTIVE";
 $("farm-state").textContent=begin===null?"READY TO FARM":ready?"CYCLE COMPLETE":"MINING POINTS";
 $("farm-percent").textContent=Math.floor(progress)+"%";
+var farmingCard=document.querySelector(".farm-card");if(farmingCard)farmingCard.dataset.phase=begin===null?"standby":ready?"ready":"active";
 $("protocol-state").textContent=begin===null?"STANDBY":ready?"CLAIM READY":"FARMING";
 $("protocol-progress").textContent=Math.floor(progress)+"%";
 $("protocol-cycles").textContent=fmt(state.farmCount);
