@@ -288,6 +288,170 @@ def index():
     return FileResponse(HERE / "public" / "index.html")
 
 
+
+# ---------------------------------------------------------------------------
+# Telegram Bot Gateway — profile launch button and /start response
+# No database is needed for welcome, help, or Mini App launch.
+# ---------------------------------------------------------------------------
+
+from urllib.error import HTTPError, URLError
+from urllib.request import Request as UrlRequest, urlopen
+from fastapi import Request
+
+ZENQORY_APP_URL = "https://crypto-jade-nine.vercel.app"
+_bot_setup_completed = False
+
+
+def _bot_webhook_secret(token: str) -> str:
+    # Telegram sends this value in its X-Telegram-Bot-Api-Secret-Token header.
+    # Derived from BOT_TOKEN so the owner doesn't need a second environment secret.
+    return hashlib.sha256(("zenqory:webhook:v1:" + token).encode("utf-8")).hexdigest()
+
+
+def _bot_api(method: str, payload: dict, token: str) -> dict:
+    # Never print requests or exceptions; Telegram bot tokens occur in request URLs.
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = UrlRequest(
+        "https://api.telegram.org/bot" + token + "/" + method,
+        data=body, method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            result = json.load(response)
+    except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+        print("Telegram API operation failed:", method, type(exc).__name__)
+        raise HTTPException(502, "Telegram bot setup failed. Check BOT_TOKEN in Vercel.") from None
+    if not result.get("ok"):
+        raise HTTPException(502, "Telegram rejected bot setup. Check BOT_TOKEN.")
+    return result
+
+
+def _setup_telegram_bot() -> dict:
+    global _bot_setup_completed
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if not token:
+        raise HTTPException(503, "Set BOT_TOKEN in Vercel Environment Variables first")
+    if _bot_setup_completed:
+        return {"ok": True, "webhook": "configured", "menu": "configured"}
+    webhook = ZENQORY_APP_URL + "/api/telegram/webhook"
+    _bot_api("setWebhook", {
+        "url": webhook,
+        "secret_token": _bot_webhook_secret(token),
+        "allowed_updates": ["message"],
+        "drop_pending_updates": False,
+    }, token)
+    _bot_api("setChatMenuButton", {
+        "menu_button": {
+            "type": "web_app",
+            "text": "Open ZENQORY",
+            "web_app": {"url": ZENQORY_APP_URL},
+        }
+    }, token)
+    _bot_api("setMyCommands", {
+        "commands": [
+            {"command": "start", "description": "Welcome and launch ZENQORY"},
+            {"command": "app", "description": "Open the rewards mini app"},
+            {"command": "help", "description": "How ZENQORY rewards work"},
+            {"command": "status", "description": "Check the app status"},
+        ]
+    }, token)
+    _bot_setup_completed = True
+    return {"ok": True, "webhook": "configured", "menu": "configured"}
+
+
+@app.post("/api/telegram/activate", include_in_schema=False)
+def activate_telegram(x_telegram_init_data: str = Header(default="")):
+    """Secure one-time setup after launch from the actual Telegram Mini App."""
+    telegram_identity(x_telegram_init_data)
+    return _setup_telegram_bot()
+
+
+@app.post("/api/telegram/webhook", include_in_schema=False)
+async def telegram_webhook(request: Request,
+                           x_telegram_bot_api_secret_token: str = Header(default="")):
+    """Telegram delivers /start here after our bot has a registered webhook."""
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if not token or not hmac.compare_digest(
+        _bot_webhook_secret(token), x_telegram_bot_api_secret_token
+    ):
+        raise HTTPException(403, "Invalid Telegram webhook authentication")
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+        raise HTTPException(415, "Expected JSON")
+    try:
+        payload = await request.json()
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Invalid update payload") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Invalid update payload")
+    message = payload.get("message")
+    if not isinstance(message, dict):
+        return {"ok": True}
+    chat = message.get("chat") or {}
+    if not isinstance(chat, dict) or chat.get("type") != "private":
+        return {"ok": True}
+    chat_id = chat.get("id")
+    if not isinstance(chat_id, int) or chat_id <= 0:
+        return {"ok": True}
+    raw_text = message.get("text", "")
+    if not isinstance(raw_text, str):
+        return {"ok": True}
+    command = raw_text.strip().split(maxsplit=1)[0].split("@")[0].lower()
+    if command in ("/start", "/app", "start", "open zenqory"):
+        first_name = str((message.get("from") or {}).get("first_name") or "Explorer")[:40]
+        greeting = (
+            "💚 Barka da zuwa ZENQORY, " + first_name + "!\n\n"
+            "🚀 Your digital rewards journey starts here.\n\n"
+            "🪙 Start an 8-hour farming cycle\n"
+            "🎯 Complete reward missions\n"
+            "👥 Invite your friends\n"
+            "💎 Track your ZNQY pre-launch points\n\n"
+            "👇 Tap the button below to launch ZENQORY.\n\n"
+            "ℹ️ Rewards are currently pre-launch points, not tradeable cryptocurrency."
+        )
+    elif command == "/help":
+        greeting = (
+            "💚 ZENQORY HELP\n\n"
+            "Use /start or /app to open the Mini App.\n"
+            "Farming: start an 8-hour cycle, then claim points.\n"
+            "Missions and daily rewards can earn additional points.\n\n"
+            "Current phase: preview. Demo points stay on your device until "
+            "secure live storage is configured."
+        )
+    elif command == "/status":
+        greeting = (
+            "🟢 ZENQORY Mini App is available.\n"
+            "🧪 Rewards: preview mode until database is connected.\n"
+            "Tap below to launch."
+        )
+    else:
+        greeting = "💚 Welcome to ZENQORY! Tap the button below, or use /help."
+    # Bot API allows answering a webhook with the method + parameters as JSON,
+    # avoiding a separate outbound request and reducing latency.
+    return {
+        "method": "sendMessage",
+        "chat_id": chat_id,
+        "text": greeting,
+        "reply_markup": {
+            "inline_keyboard": [[{
+                "text": "🚀 Launch ZENQORY",
+                "web_app": {"url": ZENQORY_APP_URL}
+            }]]
+        },
+    }
+
+
+@app.get("/api/telegram/status", include_in_schema=False)
+def telegram_status():
+    """Safe public config check; never exposes token or Telegram user data."""
+    return {
+        "app": "ZENQORY",
+        "bot_token_configured": bool(os.environ.get("BOT_TOKEN", "").strip()),
+        "app_url": ZENQORY_APP_URL,
+        "activation": "Launch the Mini App from Telegram to register the webhook",
+    }
+
+
 # Local uvicorn convenience. On Vercel, the public/ folder is served by its CDN.
 if not os.environ.get("VERCEL"):
     for asset, mime in [("styles.css", "text/css"), ("app.js", "text/javascript"),
