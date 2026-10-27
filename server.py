@@ -356,6 +356,18 @@ def _setup_telegram_bot() -> dict:
             {"command": "status", "description": "Check the app status"},
         ]
     }, token)
+    _bot_api("setMyShortDescription", {
+        "short_description": "ZENQORY | Farm reward points, complete missions, invite friends. Genesis preview."
+    }, token)
+    _bot_api("setMyDescription", {
+        "description": (
+            "💚 Welcome to ZENQORY — a futuristic pre-launch rewards community.\n\n"
+            "🚀 Open our Telegram Mini App to start 8-hour farming cycles, "
+            "complete missions and invite friends.\n\n"
+            "🪙 ZNQY points are off-chain preview rewards, not a tradeable token. "
+            "Live rewards storage and further features will be announced after testing."
+        )
+    }, token)
     _bot_setup_completed = True
     return {"ok": True, "webhook": "configured", "menu": "configured"}
 
