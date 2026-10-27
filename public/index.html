@@ -50,6 +50,10 @@
   <div class="header-actions"><button class="icon-circle" id="notification-button" aria-label="Notifications"><svg><use href="#i-bell"/></svg><span class="signal-dot"></span></button><button class="icon-circle" id="settings-button" aria-label="Settings"><svg><use href="#i-settings"/></svg></button></div>
  </header>
  <div class="preview-strip" id="preview-strip"><span class="live-point"></span> INTERACTIVE PREVIEW <span class="strip-divider">/</span> Rewards shown are demo points, not crypto.</div>
+ <aside class="session-guide" id="session-guide" hidden role="status" aria-live="polite">
+   <div class="session-guide-copy"><strong id="session-guide-title">Connection status</strong><p id="session-guide-text">Checking your Telegram connection…</p></div>
+   <button type="button" class="session-guide-button" id="session-guide-action" hidden>OPEN OFFICIAL BOT</button>
+ </aside>
  <div class="screen active" id="screen-home" data-screen="home"><div class="tech-header-strip"><span><i class="telemetry-blip"></i><span id="session-status">PRE-LAUNCH INTERFACE</span></span><span>ZNQY <b>//</b> GENESIS 01</span></div>
   <div class="hero balance-hero hud-frame"><span class="hud-corner hud-tl"></span><span class="hud-corner hud-tr"></span><span class="hud-corner hud-bl"></span><span class="hud-corner hud-br"></span><div class="hero-telemetry" aria-hidden="true">01 <i></i> ZN.QY</div>
     <div class="hero-copy"><span class="overline">TOTAL REWARDS BALANCE <svg class="info-icon"><use href="#i-help"/></svg></span><div class="hero-number"><span data-balance>0</span></div><div class="balance-unit">ZNQY <span>Points</span></div><div class="hero-mini-chip"><span class="chip-dot"></span> PRE-LAUNCH REWARDS</div></div>
@@ -106,7 +110,7 @@
    <button class="setting-item" id="account-setting"><span class="setting-symbol"><svg><use href="#i-user"/></svg></span><span><strong>Account</strong><small>Telegram-linked identity</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
    <button class="setting-item" id="notifications-setting"><span class="setting-symbol"><svg><use href="#i-bell"/></svg></span><span><strong>Notifications</strong><small>Rewards and announcements</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
    <button class="setting-item" id="security-setting"><span class="setting-symbol"><svg><use href="#i-shield"/></svg></span><span><strong>Security &amp; privacy</strong><small>Keep your wallet and data safe</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
-   <button class="setting-item" id="language-setting"><span class="setting-symbol"><svg><use href="#i-globe"/></svg></span><span><strong>Language</strong><small>English / Hausa</small></span><span class="setting-value" id="language-value">EN</span></button>
+   <button class="setting-item" id="language-setting"><span class="setting-symbol"><svg><use href="#i-globe"/></svg></span><span><strong>Language</strong><small>English only</small></span><span class="setting-value" id="language-value">EN</span></button>
    <button class="setting-item" data-go="wallet"><span class="setting-symbol"><svg><use href="#i-wallet"/></svg></span><span><strong>Digital wallet</strong><small>View your points and future plans</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
    <button class="setting-item" id="support-setting"><span class="setting-symbol"><svg><use href="#i-help"/></svg></span><span><strong>Help &amp; support</strong><small>How farming and rewards work</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
   </div>
