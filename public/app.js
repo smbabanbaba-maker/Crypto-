@@ -86,24 +86,30 @@ else{
   $("preview-strip").hidden=true;
   if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
   busy=true;render();
-  // The first verified Telegram Mini App launch registers the bot webhook,
-  // /start response, command menu and Launch App button — no database needed.
-  callApi("/telegram/activate","POST").then(function(){
-    botReady=true;renderCyber();notice("ZENQORY bot is connected. Send /start again.");
-  }).catch(function(error){
-    if(error.status===503){notice("Preview ready. Add BOT_TOKEN in Vercel to activate bot replies.");}
-    else{notice("Bot connection pending: "+error.message);}
-  });
+  // Bot setup is separate from user rewards. A first-launch status check
+  // provisions the fixed webhook even when the rewards database is absent.
+  fetch("/api/telegram/status",{method:"GET",cache:"no-store"}).then(function(response){
+    if(!response.ok)throw new Error("Bot status unavailable");
+    return response.json();
+  }).then(function(info){
+    botReady=info.setup==="ready";
+    if(botReady){renderCyber();notice("Telegram bot online. Send /start in chat.");}
+    else if(info.bot_token_configured===false){notice("Add BOT_TOKEN in Vercel to enable /start replies.");}
+    else if(info.bot_token_format_valid===false){notice("Check BOT_TOKEN formatting in Vercel.");}
+    else if(info.bot_api_reachable===false){notice("Bot token verification failed. Check BotFather token.");}
+  }).catch(function(){/* Preview remains available if bot status is unreachable. */});
   callApi("/me","GET").then(function(payload){
     busy=false;normalize(payload);render();notice("Telegram account connected successfully.");
   }).catch(function(error){
+    // The interface must remain usable while authentication or database setup
+    // is incomplete. This fallback NEVER sends demo points to the server.
+    busy=false;loadPreview();
     if(error.status===503){
-      busy=false;loadPreview();
-      notice("Preview mode active: server storage is not connected yet.");
-      modal("ZENQORY Preview Ready","You can use all five pages, start an 8-hour test cycle, claim demo points, check daily rewards and missions, and share this app. Points are stored only on this device until live server storage is connected.");
+      modal("ZENQORY Preview Mode","Welcome! Bot chat and all five pages can be tested without a database. Farming, Claim, Daily Rewards and Tasks use demo points on this device only.");
+    }else if(error.status===401||error.status===403){
+      modal("ZENQORY Test Mode","Telegram could not verify this session. Check that Vercel BOT_TOKEN belongs to this exact ZENQORY bot. You can still test all app buttons using local demo points. No real rewards will be recorded.");
     }else{
-      busy=true;render();notice("Telegram verification failed: "+error.message);
-      modal("Telegram login required","Your Telegram session could not be verified. Please close the app and open it again from your official bot. For a local demonstration, open the website in a regular browser.");
+      modal("ZENQORY Demo Available","The rewards server did not respond as expected. All five screens remain accessible in local preview. Real reward balances require a working verified login and database.");
     }
   });
 }
