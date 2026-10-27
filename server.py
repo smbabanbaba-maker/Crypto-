@@ -300,6 +300,11 @@ from urllib.request import Request as UrlRequest, urlopen
 from fastapi import Request
 
 ZENQORY_APP_URL = "https://crypto-jade-nine.vercel.app"
+ZENQORY_BOT_DESCRIPTION = (
+    "Explore a new era of digital rewards. 🚀\n\n"
+    "Farm points every 8 hours, complete missions and grow with your friends. 💚\n\n"
+    "ZNQY is a pre-launch points system, not a tradeable cryptocurrency."
+)
 
 
 def channel_link() -> str:
@@ -374,13 +379,7 @@ def _setup_telegram_bot() -> dict:
         "short_description": "ZENQORY | Farm reward points, complete missions, invite friends. Genesis preview."
     }, token)
     _bot_api("setMyDescription", {
-        "description": (
-            "💚 Welcome to ZENQORY — a futuristic pre-launch rewards community.\n\n"
-            "🚀 Open our Telegram Mini App to start 8-hour farming cycles, "
-            "complete missions and invite friends.\n\n"
-            "🪙 ZNQY points are off-chain preview rewards, not a tradeable token. "
-            "Live rewards storage and further features will be announced after testing."
-        )
+        "description": ZENQORY_BOT_DESCRIPTION
     }, token)
     _bot_setup_completed = True
     return {"ok": True, "webhook": "configured", "menu": "configured"}
@@ -521,6 +520,11 @@ def telegram_status():
         bot = _bot_api("getMe", {}, token).get("result") or {}
         response["bot_api_reachable"] = True
         response["bot_username"] = bot.get("username")
+        # Synchronize our brief, original welcome copy without touching media.
+        # BotFather exclusively controls the GIF/video description picture.
+        current_description = _bot_api("getMyDescription", {}, token).get("result") or {}
+        if current_description.get("description", "") != ZENQORY_BOT_DESCRIPTION:
+            _bot_api("setMyDescription", {"description": ZENQORY_BOT_DESCRIPTION}, token)
         webhook_info = _bot_api("getWebhookInfo", {}, token).get("result") or {}
         expected = ZENQORY_APP_URL + "/api/telegram/webhook"
         if webhook_info.get("url") != expected:
