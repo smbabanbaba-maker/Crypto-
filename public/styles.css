@@ -294,23 +294,3 @@ body:before{content:"";position:fixed;z-index:0;inset:0;pointer-events:none;
 @media(prefers-reduced-motion:reduce){
  .telemetry-blip,.balance-hero .orb-scene:before,.farm-card .radial-progress:after,.signal-wave i,.network-art i,.network-avatar,.network-connectors span,.network-spectrum-lines span,.wallet-hero .orb-mini,.large-avatar{animation:none!important}
 }
-
-
-/* Mini App launch status — small, non-blocking, accessible, English-only */
-.session-guide[hidden],.session-guide-button[hidden]{display:none!important}
-.session-guide{position:relative;z-index:2;display:flex;align-items:center;gap:10px;justify-content:space-between;
- margin:4px 0 10px;padding:10px 11px;border:1px solid rgba(141,255,168,.33);
- border-left:3px solid #93ff99;border-radius:10px;
- background:linear-gradient(110deg,rgba(16,44,26,.98),rgba(5,18,11,.98));
- box-shadow:inset 0 1px 0 rgba(133,255,163,.09),0 5px 19px rgba(0,0,0,.23)}
-.session-guide-copy{min-width:0;flex:1}
-.session-guide-copy strong{display:block;color:#d5ffdd;font:700 10px var(--display);letter-spacing:.2px}
-.session-guide-copy p{font-size:10px;line-height:1.55;color:#9fb8a8;margin:3px 0 0;overflow-wrap:break-word}
-.session-guide-button{flex:0 0 auto;max-width:100px;padding:9px 7px;border:1px solid rgba(151,255,157,.48);
- border-radius:8px;background:linear-gradient(145deg,#214d2b,#14341e);color:#d6ffd6;
- box-shadow:0 0 12px rgba(50,255,90,.2);font:700 8px var(--display);
- letter-spacing:.25px;line-height:1.4}
-.session-guide-button:focus-visible{outline:2px solid #abff91;outline-offset:2px}
-.session-guide-button:active{transform:scale(.97)}
-@media(max-width:360px){.session-guide{align-items:stretch;flex-direction:column}.session-guide-button{max-width:none;width:100%}}
-@media(prefers-reduced-motion:reduce){.session-guide-button:active{transform:none}}
