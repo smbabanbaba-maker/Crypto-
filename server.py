@@ -455,13 +455,45 @@ async def telegram_webhook(request: Request,
 
 @app.get("/api/telegram/status", include_in_schema=False)
 def telegram_status():
-    """Safe public config check; never exposes token or Telegram user data."""
-    return {
+    """Safe one-click bot diagnostics + one-time automatic webhook configuration.
+
+    The webhook URL, commands and menu button are hardcoded for this project.
+    This endpoint never returns a token or arbitrary Telegram chat/user data.
+    """
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    response = {
         "app": "ZENQORY",
-        "bot_token_configured": bool(os.environ.get("BOT_TOKEN", "").strip()),
+        "bot_token_configured": bool(token),
+        "bot_token_format_valid": bool(token and __import__("re").fullmatch(r"[0-9]{5,}:[A-Za-z0-9_-]{30,}", token)),
         "app_url": ZENQORY_APP_URL,
-        "activation": "Launch the Mini App from Telegram to register the webhook",
+        "bot_api_reachable": False,
+        "bot_username": None,
+        "webhook_connected": False,
+        "webhook_pending_updates": 0,
+        "setup": "awaiting_bot_token",
     }
+    if not token:
+        return response
+    try:
+        bot = _bot_api("getMe", {}, token).get("result") or {}
+        response["bot_api_reachable"] = True
+        response["bot_username"] = bot.get("username")
+        webhook_info = _bot_api("getWebhookInfo", {}, token).get("result") or {}
+        expected = ZENQORY_APP_URL + "/api/telegram/webhook"
+        if webhook_info.get("url") != expected:
+            _setup_telegram_bot()
+            webhook_info = _bot_api("getWebhookInfo", {}, token).get("result") or {}
+        response["webhook_connected"] = webhook_info.get("url") == expected
+        response["webhook_pending_updates"] = int(webhook_info.get("pending_update_count") or 0)
+        response["setup"] = "ready" if response["webhook_connected"] else "webhook_not_ready"
+        if webhook_info.get("last_error_date"):
+            response["webhook_delivery_problem"] = True
+    except HTTPException as exc:
+        # Deliberately omit URL, token, Telegram response content and exceptions.
+        response["setup"] = "telegram_connection_failed"
+        response["http_error"] = exc.status_code
+    return response
+
 
 
 # Local uvicorn convenience. On Vercel, the public/ folder is served by its CDN.
