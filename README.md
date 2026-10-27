@@ -97,3 +97,9 @@ Once the Mini App has opened from Telegram, send /start again in the bot chat to
 Public, non-secret diagnostic endpoint: GET /api/telegram/status. It reports whether BOT_TOKEN is configured, without showing any credential. If BOT_TOKEN is missing, Telegram bot replies cannot activate; the website still works in local preview mode without a database. Preview points are device-local, not actual server balances.
 
 **Security:** Telegram webhook requests require the correct X-Telegram-Bot-Api-Secret-Token. The activation endpoint requires cryptographically verified Telegram Mini App initData, and registers only the fixed ZENQORY domain. Live reward APIs still require signed identities and PostgreSQL.
+
+## Telegram intro media and Join Channel
+
+Telegram's bot description supports animation through @BotFather > /mybots > ZENQORY > Edit Bot > Edit Description Picture. Upload the delivered ZENQORY_Bot_Description.gif (320x180 looping GIF) or ZENQORY_Telegram_Intro.mp4 (640x360 video). Uploading description media requires the owner to use BotFather, and is not done automatically by GitHub or the webhook. The concise English welcome copy synchronizes via GET /api/telegram/status.
+
+The /start, /app, /help, /status and /channel bot messages display a second inline button labelled Join Channel below Launch ZENQORY when the official community URL is known. In Vercel project crypto, set environment variable CHANNEL_URL (Production) to the real https://t.me/channel_username or a real private invite URL, then redeploy. The link is validated and does not fall back to a fabricated channel. Without CHANNEL_URL, launch works normally and /channel says the link is pending. CHANNEL_URL is NOT BOT_USERNAME.
