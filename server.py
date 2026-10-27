@@ -35,7 +35,7 @@ def utc_ms() -> int:
 
 def telegram_identity(raw: str) -> dict:
     """Never trust initDataUnsafe from JavaScript; verify Telegram signature."""
-    token = os.environ.get("BOT_TOKEN", "")
+    token = os.environ.get("BOT_TOKEN", "").strip()
     if not token:
         raise HTTPException(503, "The Telegram bot has not been configured")
     if not raw or len(raw) > 8192:
