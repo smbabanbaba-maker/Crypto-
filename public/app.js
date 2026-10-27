@@ -3,22 +3,24 @@
 "use strict";
 var tg=window.Telegram&&window.Telegram.WebApp;
 try{if(tg){tg.ready();tg.expand();tg.setHeaderColor("#030605");tg.setBackgroundColor("#030605");}}catch(e){}
-var DEMO=!(tg&&tg.initData),FARM_MS=8*60*60*1000,DAILY_MS=24*60*60*1000;
+var hasTelegramSession=!!(tg&&tg.initData),DEMO=!hasTelegramSession,FARM_MS=8*60*60*1000,DAILY_MS=24*60*60*1000;
 var tasks=[{id:"welcome",name:"Explore ZENQORY",desc:"Discover your new digital rewards space",reward:30,icon:"i-spark"},{id:"safety",name:"Learn about reward points",desc:"Understand our pre-launch points system",reward:20,icon:"i-shield"},{id:"profile",name:"View your profile",desc:"Discover your Explorer identity",reward:15,icon:"i-user"}];
 var $=function(id){return document.getElementById(id);};
 var empty=function(){return{balance:0,farmStart:null,farmCount:0,lastDaily:null,tasks:[],refCount:0,refPoints:0,firstName:"Explorer",id:"Preview",history:[]};};
-var state=empty(),referralLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;
+var state=empty(),referralLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
 var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'"></use></svg>';};
 var now=function(){return Date.now();};
 function normalize(data){if(!data||typeof data!=="object")return;state=Object.assign({},state,data);if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.history))state.history=[];if(typeof data.referralLink==="string")referralLink=data.referralLink;}
-function persist(){if(DEMO){try{localStorage.setItem("zenqory-v3-demo",JSON.stringify(state));}catch(e){}}}
+function previewKey(){var user=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;return user&&user.id?"zenqory-v3-demo-"+String(user.id):"zenqory-v3-demo";}
+function loadPreview(){state=empty();var person=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;try{normalize(JSON.parse(localStorage.getItem(previewKey())||"null"));}catch(e){}if(person&&person.first_name)state.firstName=String(person.first_name).slice(0,60);referralLink=APP_URL;DEMO=true;$("preview-strip").hidden=false;render();}
+function persist(){if(DEMO){try{localStorage.setItem(previewKey(),JSON.stringify(state));}catch(e){}}}
 function notice(message){var box=$("toast");box.textContent=message;box.classList.add("visible");clearTimeout(toastTimeout);toastTimeout=setTimeout(function(){box.classList.remove("visible");},3300);}
 function modal(title,description){$("modal-title").textContent=title;$("modal-description").textContent=description;$("modal-backdrop").hidden=false;}
 function closeModal(){$("modal-backdrop").hidden=true;}
 function clock(ms){var sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return[String(h).padStart(2,"0"),String(m).padStart(2,"0"),String(s).padStart(2,"0")].join(":");}
 function record(type,amount){state.history.unshift({type:type,amount:amount,at:Date.now()});state.history=state.history.slice(0,15);}
-async function callApi(path,method){var response=await fetch("/api"+path,{method:method||"GET",headers:{"X-Telegram-Init-Data":tg&&tg.initData?tg.initData:"","Content-Type":"application/json"}});var body;try{body=await response.json();}catch(e){throw new Error("Service returned an unexpected response");}if(!response.ok){throw new Error(body.detail||"Request failed");}return body;}
+async function callApi(path,method){var response=await fetch("/api"+path,{method:method||"GET",headers:{"X-Telegram-Init-Data":tg&&tg.initData?tg.initData:"","Content-Type":"application/json"}});var body;try{body=await response.json();}catch(e){throw new Error("Service returned an unexpected response");}if(!response.ok){var error=new Error(body.detail||"Request failed");error.status=response.status;throw error;}return body;}
 async function perform(path,demoAction,success){if(busy)return;busy=true;try{if(DEMO){demoAction();persist();}else{normalize(await callApi(path,"POST"));}render();notice(success);}catch(e){notice(e.message||"Something went wrong");}finally{busy=false;renderFarming();}}
 function openTab(name){if(["home","earn","friends","wallet","profile"].indexOf(name)<0)return;tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});window.scrollTo({top:0,behavior:"smooth"});try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}}
 function renderFarming(){var begin=state.farmStart,elapsed=begin===null?0:Math.max(0,now()-begin),progress=begin===null?0:Math.min(100,100*elapsed/FARM_MS),ready=begin!==null&&elapsed>=FARM_MS;
@@ -42,7 +44,9 @@ tasks.forEach(function(t){var done=claimed.indexOf(t.id)!==-1;html+='<article cl
 $("mission-list").innerHTML=html;$("mission-done").textContent=count;$("mission-progress").style.width=(count/tasks.length*100)+"%";$("mission-signal").textContent=count+"/"+tasks.length+" COMPLETE";$("earn-done").textContent=count+"/"+tasks.length;$("quick-tasks").textContent=count+" / "+tasks.length+" COMPLETED";$("earn-farm").textContent=fmt(state.farmCount);$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";}
 function renderActivity(){var entries=state.history||[];var box=$("activity-list");if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
 function renderCyber(){
-  $("session-status").textContent=DEMO?"PREVIEW • LOCAL ONLY":"TELEGRAM SESSION";
+  $("session-status").textContent=DEMO?"LOCAL PREVIEW • TEST MODE":"TELEGRAM SESSION";
+  $("referral-code").textContent=DEMO?"Share ZENQORY preview":(referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite");
+  $("referral-note").textContent=DEMO?"Preview invite only — no referral rewards are recorded.":"Invite friends using your Telegram Mini App link.";
   $("network-spectrum-count").textContent=fmt(state.refCount)+" INVITED FRIEND"+(state.refCount===1?"":"S");
   $("profile-code").textContent=DEMO?"PREVIEW":String(state.id||"").slice(-6);
   var count=Math.max(0,Number(state.farmCount)||0),stage=count%5,percentage=100*stage/5;
@@ -59,7 +63,7 @@ async function startOrClaim(){if(state.farmStart===null){await perform("/farm/st
 function claimDaily(){if(state.lastDaily&&now()-state.lastDaily<DAILY_MS)return;perform("/daily",function(){state.lastDaily=now();state.balance+=20;record("Daily reward",20);},"+20 points added to your rewards balance");}
 function claimTask(id){var task=tasks.find(function(t){return t.id===id;});if(!task||state.tasks.indexOf(id)!==-1)return;if(id==="safety"){modal("Rewards are not cryptocurrency","ZENQORY points are pre-launch, off-chain loyalty rewards. They cannot currently be sold, withdrawn or exchanged, and have no guaranteed future value. This learning mission provides an educational points reward.");}
 perform("/tasks/"+id,function(){state.tasks.push(id);state.balance+=task.reward;record(task.name,task.reward);},"Mission complete! +"+task.reward+" points");}
-function share(){if(!referralLink){modal("Open inside Telegram","Your personal invite link appears after opening ZENQORY through your official Telegram Mini App.");return;}var uri="https://t.me/share/url?url="+encodeURIComponent(referralLink)+"&text="+encodeURIComponent("Join ZENQORY — an early digital rewards community.");try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}catch(e){window.open(uri,"_blank","noopener,noreferrer");}}
+function share(){if(!referralLink){modal("Open inside Telegram","Your personal invite link appears after opening ZENQORY through your official Telegram Mini App.");return;}if(DEMO)notice("Preview share: bonuses are not tracked yet.");var uri="https://t.me/share/url?url="+encodeURIComponent(referralLink)+"&text="+encodeURIComponent("Join ZENQORY — an early digital rewards community.");try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}catch(e){window.open(uri,"_blank","noopener,noreferrer");}}
 async function copyReferral(){if(!referralLink)return;try{await navigator.clipboard.writeText(referralLink);notice("Invite link copied");}catch(e){modal("Your invite link",referralLink);}}
 function showInfo(kind){var info={
 notification:["Notifications","Farming reminders and major ecosystem updates will appear here as we develop the official Telegram bot."],
@@ -77,6 +81,23 @@ $("avatar-button").addEventListener("click",function(){openTab("profile");});$("
 $("wallet-connect").addEventListener("click",function(){showInfo("wallet");});$("wallet-withdraw").addEventListener("click",function(){showInfo("withdraw");});
 ["account","notifications","security","language","support"].forEach(function(item){var btn=$(item+"-setting");if(btn)btn.addEventListener("click",function(){showInfo(item==="notifications"?"notification":item);});});
 $("modal-close").addEventListener("click",closeModal);$("modal-ok").addEventListener("click",closeModal);$("modal-backdrop").addEventListener("click",function(e){if(e.target===$("modal-backdrop"))closeModal();});document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
-if(DEMO){try{normalize(JSON.parse(localStorage.getItem("zenqory-v3-demo")||"null"));}catch(e){}$("preview-strip").hidden=false;render();}else{$("preview-strip").hidden=true;if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user){state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";}render();callApi("/me","GET").then(function(payload){normalize(payload);render();}).catch(function(error){notice("Unable to connect securely: "+error.message);$("farm-button").disabled=true;$("daily-card").disabled=true;modal("Connection required","Could not initialize your verified Telegram rewards account. Please reopen the Mini App from the official bot, or contact the team if the problem persists.");});}
+if(DEMO){loadPreview();}
+else{
+  $("preview-strip").hidden=true;
+  if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
+  busy=true;render();
+  callApi("/me","GET").then(function(payload){
+    busy=false;normalize(payload);render();notice("Telegram account connected successfully.");
+  }).catch(function(error){
+    if(error.status===503){
+      busy=false;loadPreview();
+      notice("Preview mode active: server storage is not connected yet.");
+      modal("ZENQORY Preview Ready","You can use all five pages, start an 8-hour test cycle, claim demo points, check daily rewards and missions, and share this app. Points are stored only on this device until live server storage is connected.");
+    }else{
+      busy=true;render();notice("Telegram verification failed: "+error.message);
+      modal("Telegram login required","Your Telegram session could not be verified. Please close the app and open it again from your official bot. For a local demonstration, open the website in a regular browser.");
+    }
+  });
+}
 setInterval(function(){renderFarming();if(tab==="earn")$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";},1000);
 })();
