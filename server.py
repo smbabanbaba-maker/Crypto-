@@ -13,6 +13,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qsl
+import re
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -299,6 +300,18 @@ from urllib.request import Request as UrlRequest, urlopen
 from fastapi import Request
 
 ZENQORY_APP_URL = "https://crypto-jade-nine.vercel.app"
+
+
+def channel_link() -> str:
+    """Allow only a real, explicitly configured Telegram channel/invite URL.
+
+    Never guess a public channel or send users to a bot in its place.
+    """
+    url = os.environ.get("CHANNEL_URL", "").strip()
+    if re.fullmatch(r"https://t\.me/(?:[A-Za-z0-9_]{5,32}|\+[A-Za-z0-9_-]{10,}|joinchat/[A-Za-z0-9_-]{10,})/?", url):
+        return url
+    return ""
+
 _bot_setup_completed = False
 
 
@@ -354,6 +367,7 @@ def _setup_telegram_bot() -> dict:
             {"command": "app", "description": "Open the rewards mini app"},
             {"command": "help", "description": "How ZENQORY rewards work"},
             {"command": "status", "description": "Check the app status"},
+            {"command": "channel", "description": "Join the official ZENQORY community"},
         ]
     }, token)
     _bot_api("setMyShortDescription", {
@@ -436,6 +450,14 @@ async def telegram_webhook(request: Request,
             "👇 Tap the button below to launch ZENQORY.\n\n"
             "ℹ️ Rewards are currently pre-launch points, not tradeable cryptocurrency."
         )
+    elif command in ("/channel", "/join"):
+        greeting = (
+            "📣 ZENQORY COMMUNITY\n\n"
+            + ("Join our official channel below for launch news and updates."
+               if channel_link() else
+               "The official ZENQORY channel link has not been connected yet. "
+               "Please check back soon.")
+        )
     elif command == "/help":
         greeting = (
             "💚 ZENQORY HELP\n\n"
@@ -455,16 +477,21 @@ async def telegram_webhook(request: Request,
         greeting = "💚 Welcome to ZENQORY! Tap the button below, or use /help."
     # Bot API allows answering a webhook with the method + parameters as JSON,
     # avoiding a separate outbound request and reducing latency.
+    buttons = [[{
+        "text": "🚀 Launch ZENQORY",
+        "web_app": {"url": ZENQORY_APP_URL}
+    }]]
+    official_channel = channel_link()
+    if official_channel:
+        buttons.append([{
+            "text": "📣 Join Channel",
+            "url": official_channel
+        }])
     return {
         "method": "sendMessage",
         "chat_id": chat_id,
         "text": greeting,
-        "reply_markup": {
-            "inline_keyboard": [[{
-                "text": "🚀 Launch ZENQORY",
-                "web_app": {"url": ZENQORY_APP_URL}
-            }]]
-        },
+        "reply_markup": {"inline_keyboard": buttons},
     }
 
 
@@ -484,6 +511,7 @@ def telegram_status():
         "bot_api_reachable": False,
         "bot_username": None,
         "webhook_connected": False,
+        "channel_button_configured": bool(channel_link()),
         "webhook_pending_updates": 0,
         "setup": "awaiting_bot_token",
     }
