@@ -7,7 +7,7 @@ var hasTelegramSession=!!(tg&&tg.initData),DEMO=!hasTelegramSession,FARM_MS=8*60
 var tasks=[{id:"welcome",name:"Explore ZENQORY",desc:"Discover your new digital rewards space",reward:30,icon:"i-spark"},{id:"safety",name:"Learn about reward points",desc:"Understand our pre-launch points system",reward:20,icon:"i-shield"},{id:"profile",name:"View your profile",desc:"Discover your Explorer identity",reward:15,icon:"i-user"}];
 var $=function(id){return document.getElementById(id);};
 var empty=function(){return{balance:0,farmStart:null,farmCount:0,lastDaily:null,tasks:[],refCount:0,refPoints:0,firstName:"Explorer",id:"Preview",history:[]};};
-var state=empty(),referralLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var APP_URL="https://crypto-jade-nine.vercel.app";
+var state=empty(),referralLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var botReady=false;var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
 var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'"></use></svg>';};
 var now=function(){return Date.now();};
@@ -44,7 +44,7 @@ tasks.forEach(function(t){var done=claimed.indexOf(t.id)!==-1;html+='<article cl
 $("mission-list").innerHTML=html;$("mission-done").textContent=count;$("mission-progress").style.width=(count/tasks.length*100)+"%";$("mission-signal").textContent=count+"/"+tasks.length+" COMPLETE";$("earn-done").textContent=count+"/"+tasks.length;$("quick-tasks").textContent=count+" / "+tasks.length+" COMPLETED";$("earn-farm").textContent=fmt(state.farmCount);$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";}
 function renderActivity(){var entries=state.history||[];var box=$("activity-list");if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
 function renderCyber(){
-  $("session-status").textContent=DEMO?"LOCAL PREVIEW • TEST MODE":"TELEGRAM SESSION";
+  $("session-status").textContent=botReady?"BOT CONNECTED • PREVIEW":DEMO?"LOCAL PREVIEW • TEST MODE":"TELEGRAM SESSION";
   $("referral-code").textContent=DEMO?"Share ZENQORY preview":(referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite");
   $("referral-note").textContent=DEMO?"Preview invite only — no referral rewards are recorded.":"Invite friends using your Telegram Mini App link.";
   $("network-spectrum-count").textContent=fmt(state.refCount)+" INVITED FRIEND"+(state.refCount===1?"":"S");
@@ -86,6 +86,14 @@ else{
   $("preview-strip").hidden=true;
   if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
   busy=true;render();
+  // The first verified Telegram Mini App launch registers the bot webhook,
+  // /start response, command menu and Launch App button — no database needed.
+  callApi("/telegram/activate","POST").then(function(){
+    botReady=true;renderCyber();notice("ZENQORY bot is connected. Send /start again.");
+  }).catch(function(error){
+    if(error.status===503){notice("Preview ready. Add BOT_TOKEN in Vercel to activate bot replies.");}
+    else{notice("Bot connection pending: "+error.message);}
+  });
   callApi("/me","GET").then(function(payload){
     busy=false;normalize(payload);render();notice("Telegram account connected successfully.");
   }).catch(function(error){
