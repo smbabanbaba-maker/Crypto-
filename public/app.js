@@ -7,10 +7,25 @@ var hasTelegramSession=!!(tg&&tg.initData),isTelegramClient=!!(tg&&tg.platform&&
 // Keep original mission IDs for backwards-compatible, once-only rewards.
 var tasks=[{id:"welcome",name:"Start your first farming cycle",desc:"Start a real 8-hour cycle to unlock this reward",reward:30,icon:"i-lightning"},{id:"safety",name:"Claim your first farming reward",desc:"Complete an 8-hour cycle and claim your points",reward:20,icon:"i-shield"},{id:"profile",name:"Activate your first invited friend",desc:"Invite a friend who completes their first farm claim",reward:15,icon:"i-friends"}];
 var $=function(id){return document.getElementById(id);};
-var hasLaunched=false;
+var hasLaunched=false,loginAttempt=0,launchWaitTimer=null;
+function launchStatus(message,showRetry){
+  var label=$("zen-launch-status"),detail=$("zen-launch-detail"),button=$("zen-launch-retry");
+  if(label)label.textContent=message;
+  if(detail)detail.textContent=showRetry?"Connection is taking longer than expected. You can safely try again.":"Preparing your personal rewards dashboard.";
+  if(button)button.hidden=!showRetry;
+}
+function startLaunchWait(){
+  clearTimeout(launchWaitTimer);
+  launchStatus("SECURELY CONNECTING",false);
+  launchWaitTimer=setTimeout(function(){
+    if(!hasLaunched)launchStatus("STILL CONNECTING",true);
+  },7000);
+}
+
 function revealReadyApp(){
   if(hasLaunched)return;
   hasLaunched=true;
+  clearTimeout(launchWaitTimer);
   // Never expose zero-point placeholders before verified account data is ready.
   document.body.classList.remove("zen-loading");
   document.body.classList.add("zen-ready");
@@ -519,18 +534,22 @@ function setConnectionProblem(error){
 }
 async function loginTelegram(manualRetry){
   if(DEMO)return;
+  var attempt=++loginAttempt;
+  if(!hasLaunched)startLaunchWait();
   if(!tg||!tg.initData){setConnectionProblem(new Error("Missing Telegram initData"));return;}
   busy=true;
   try{
     // /api/me verifies Telegram HMAC itself, so a second /verify request
     // doubles startup latency without adding security to the happy path.
     var snapshot=await callApi("/me","GET");
+    if(attempt!==loginAttempt)return;
     telegramVerified=true;
     normalize(snapshot);accountReady=true;DEMO=false;lastRefreshAt=now();hideSessionGuide();busy=false;render();revealReadyApp();
     if(manualRetry)notice("Secure Telegram session restored.");
-  }catch(error){setConnectionProblem(error);}
+  }catch(error){if(attempt===loginAttempt)setConnectionProblem(error);}
 }
 $("retry-login").addEventListener("click",function(){loginTelegram(true);});
+$("zen-launch-retry").addEventListener("click",function(){loginTelegram(true);});
 document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refreshLiveState();});
 if(DEMO){
   loadPreview();
