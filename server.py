@@ -436,8 +436,15 @@ def get_snapshot(conn, user_id: int) -> dict:
         "activeRefCount": active_referrals,
         "refPoints": u["referral_points"],
         "history": history,
-        "referralLink": f"https://t.me/{username}?startapp=ref_{user_id}" if username else "",
+        # First-time invites MUST land in the bot chat before launching the
+        # Mini App, so the chat remains accessible after closing the app.
+        # Telegram's ?start= link also gives us a signed webhook /start
+        # event to register the sponsor before the user creates an account.
+        "referralLink": f"https://t.me/{username}?start=ref_{user_id}" if username else "",
         "referralBotLink": f"https://t.me/{username}?start=ref_{user_id}" if username else "",
+        # Previously shared ?startapp= links continue working via signed
+        # start_param, but are no longer the default invitation route.
+        "referralMiniAppLink": f"https://t.me/{username}?startapp=ref_{user_id}" if username else "",
     }
 
 
@@ -979,7 +986,8 @@ async def telegram_webhook(request: Request,
             "🪙 Start an 8-hour farming cycle, then claim your points.\n"
             "🎯 Complete missions and discover new rewards.\n"
             "👥 Bring friends into the ZENQORY community.\n\n"
-            "Ready to explore? Tap Launch ZENQORY below. 🚀\n\n"
+            "Tap 🚀 Launch ZENQORY below to open your rewards dashboard.\n"
+            "You can return here from your Telegram chats whenever you need.\n\n"
             "ZNQY points are pre-launch rewards, not tradeable tokens." + invite_status
         )
     elif command in ("/channel", "/join"):
@@ -998,7 +1006,8 @@ async def telegram_webhook(request: Request,
     elif command == "/help":
         greeting = (
             "💚 ZENQORY HELP\n\n"
-            "Use /start or /app to open the Mini App.\n"
+            "Use /start to save this bot chat, then tap Launch ZENQORY.\n"
+            "When a friend invites you, tap Start first to register the invite.\n"
             "Farming: start an 8-hour cycle, then claim points.\n"
             "Missions and daily rewards can earn additional points.\n\n"
             "ZNQY points are pre-launch, off-chain community rewards. "
