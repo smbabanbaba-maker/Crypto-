@@ -619,6 +619,11 @@ def task_claim(task_id: str, x_telegram_init_data: str = Header(default="")):
             """, (uid,))
             farm = cursor.fetchone()
             cursor.execute("""
+              SELECT 1 FROM zen_tasks WHERE user_id=%s AND task_id=%s
+            """, (uid, task_id))
+            if cursor.fetchone():
+                raise HTTPException(409, "Mission already completed")
+            cursor.execute("""
               SELECT COUNT(*) AS n FROM zen_users
               WHERE referred_by=%s AND farm_count>0
             """, (uid,))
@@ -736,6 +741,9 @@ def admin_create_mission(body: MissionCreate,
     mission_id = "mission_" + secrets.token_hex(8)
     with session() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) AS n FROM zen_missions WHERE enabled=TRUE")
+            if int(cursor.fetchone()["n"]) >= 100:
+                raise HTTPException(409, "Maximum 100 active missions reached. Pause an old mission first")
             cursor.execute("""
               INSERT INTO zen_missions
                 (id,name,description,kind,target,points,channel,url,enabled,created_at,updated_at)
