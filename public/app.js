@@ -317,6 +317,13 @@ function renderAdminOverview(){
     panel.appendChild(editForm);list.appendChild(panel);
   });
   if(!missions.length)list.appendChild(adminElement("p","admin-placeholder","No missions found."));
+  var rewards=$("admin-rewards");rewards.replaceChildren();
+  (adminData.recentRewards||[]).forEach(function(item){
+    var date=new Date(Number(item.at)||0).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+    appendAdminLine(rewards,item.name||"Explorer",
+      (item.type||"Reward")+" · "+date,"+"+fmt(item.points)+" PTS");
+  });
+  if(!rewards.children.length)rewards.appendChild(adminElement("p","admin-placeholder","No rewards recorded yet."));
   var users=$("admin-users");users.replaceChildren();
   (adminData.recentUsers||[]).forEach(function(u){
     appendAdminLine(users,u.name||"Explorer",
