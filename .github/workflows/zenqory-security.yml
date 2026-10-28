@@ -34,7 +34,7 @@ jobs:
       BOT_USERNAME: ZenqoryTestBot
     steps:
       - name: Checkout reviewed source
-        uses: actions/checkout@11bd71901bbe5b163ce3da186d0f3a3a6a4fced # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9d9fe7b # v4.2.2
         with:
           persist-credentials: false
       - name: Install isolated Python dependencies
