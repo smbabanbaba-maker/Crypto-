@@ -131,6 +131,16 @@ class RewardsAndReferrals(unittest.TestCase):
         self.assertEqual(self.client.get("/api/me", headers=headers(INVITER)).json()["refCount"], 1)
         self.assertEqual(self.client.get("/api/me", headers=headers(SECOND_INVITER)).json()["refCount"], 0)
 
+    def test_first_bot_invite_wins_over_later_direct_link(self):
+        self.assertEqual(self.client.get("/api/me", headers=headers(INVITER)).status_code, 200)
+        self.assertEqual(self.client.get("/api/me", headers=headers(SECOND_INVITER)).status_code, 200)
+        self.assertTrue(server.remember_bot_invite(INVITEE, f"ref_{INVITER}"))
+        # The new user opens a second person's direct Mini App URL later.
+        signed_later = self.client.get("/api/me", headers=headers(INVITEE, f"ref_{SECOND_INVITER}"))
+        self.assertEqual(signed_later.status_code, 200, signed_later.text)
+        self.assertEqual(self.client.get("/api/me", headers=headers(INVITER)).json()["refCount"], 1)
+        self.assertEqual(self.client.get("/api/me", headers=headers(SECOND_INVITER)).json()["refCount"], 0)
+
     def test_invalid_or_self_referral_not_attributed(self):
         self.assertEqual(self.client.get("/api/me", headers=headers(INVITER, f"ref_{INVITER}")).status_code, 200)
         self.assertEqual(self.client.get("/api/me", headers=headers(INVITEE, "ref_99999999999")).status_code, 200)
