@@ -522,10 +522,10 @@ async function loginTelegram(manualRetry){
   if(!tg||!tg.initData){setConnectionProblem(new Error("Missing Telegram initData"));return;}
   busy=true;
   try{
-    var verified=await callApi("/telegram/verify","POST");
-    telegramVerified=true;
-    if(verified&&verified.first_name)state.firstName=String(verified.first_name).slice(0,60);
+    // /api/me verifies Telegram HMAC itself, so a second /verify request
+    // doubles startup latency without adding security to the happy path.
     var snapshot=await callApi("/me","GET");
+    telegramVerified=true;
     normalize(snapshot);accountReady=true;DEMO=false;lastRefreshAt=now();hideSessionGuide();busy=false;render();revealReadyApp();
     if(manualRetry)notice("Secure Telegram session restored.");
   }catch(error){setConnectionProblem(error);}
