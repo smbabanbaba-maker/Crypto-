@@ -799,3 +799,47 @@ body.zen-ready .zen-launch-screen{
 @media(prefers-reduced-motion:reduce){
   body.zen-ready .zen-launch-screen{transition:none!important}
 }
+
+
+/* Stable Android Telegram WebView rendering: premium visuals, no GPU flashing. */
+html,body{background:#050b07!important}
+body{overscroll-behavior-y:none}
+.zen-launch-screen{background:#050b07!important}
+.zen-launch-screen:before{background:radial-gradient(ellipse at 50% 40%,#123722 0%,#07150d 42%,#050b07 82%)!important}
+.zen-launch-panel{contain:layout style}
+body.zen-loading .app-shell{display:none!important}
+body.zen-ready .app-shell{display:block!important}
+body.zen-ready .zen-launch-screen{transition:opacity .12s linear,visibility 0s linear .12s!important}
+.screen.active{animation:none!important}
+.screen:not(.active){display:none!important}
+@media(max-width:900px){
+  /* Translucent full-screen layers and rotating filters trigger green frames
+     in some Android WebViews. Preserve depth using static gradients. */
+  .app-shell,.screen,.hero,.farm-card,.zen-boost-card,.bottom-nav,
+  .network-panel,.wallet-hero,.profile-cover,.admin-hero{
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  }
+  .cyber-v3 .zen-ambient-core,.cyber-v3 .zen-ambient-core *,
+  .cyber-v3 .zen-hero-technology,.cyber-v3 .zen-reactor-overlay,
+  .cyber-v3 .zen-hero-sweep,.cyber-v3 .zen-holo-arc,
+  .cyber-v3 .zen-spark,.cyber-v3 .zen-profile-field,
+  .cyber-v3 .zen-network-hologram,.cyber-v3 .zen-mission-target{
+    animation:none!important;transition:none!important;
+  }
+  .cyber-v3 .zen-hero-sweep,.cyber-v3 .zen-spark,
+  .cyber-v3 .zen-ambient-core,.cyber-v3 .zen-reactor-overlay{
+    display:none!important;
+  }
+  .hero,.farm-card{transform:none!important;filter:none!important}
+  .hero:before,.hero:after,.farm-card:before,.farm-card:after{
+    animation:none!important;filter:none!important;
+  }
+  .bottom-nav{background:#09170f!important;border-top:1px solid #244d32!important}
+  .app-shell{background:#050b07!important}
+  .hero,.farm-card,.zen-boost-card{background-color:#0a1d11!important}
+  .screen,.screen *{scroll-behavior:auto!important}
+  .screen.active{opacity:1!important;transform:none!important}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
