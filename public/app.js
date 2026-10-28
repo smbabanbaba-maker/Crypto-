@@ -7,7 +7,7 @@ var hasTelegramSession=!!(tg&&tg.initData),isTelegramClient=!!(tg&&tg.platform&&
 var tasks=[{id:"welcome",name:"Explore ZENQORY",desc:"Discover your new digital rewards space",reward:30,icon:"i-spark"},{id:"safety",name:"Learn about reward points",desc:"Understand our pre-launch points system",reward:20,icon:"i-shield"},{id:"profile",name:"View your profile",desc:"Discover your Explorer identity",reward:15,icon:"i-user"}];
 var $=function(id){return document.getElementById(id);};
 var empty=function(){return{balance:0,farmStart:null,farmCount:0,lastDaily:null,tasks:[],refCount:0,refPoints:0,firstName:"Explorer",id:"Preview",history:[]};};
-var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var botReady=false,telegramVerified=false,accountReady=false,botUsername="",connectionIssue="";var APP_URL="https://crypto-jade-nine.vercel.app";
+var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var telegramVerified=false,accountReady=false,connectionIssue="";var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
 var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'"></use></svg>';};
 var now=function(){return Date.now();};
@@ -135,11 +135,7 @@ if(DEMO){
   sessionGuide("Interactive preview","This browser shows local demo points only. Open the official ZENQORY Telegram Mini App for a secure rewards account.");
 }else{
   if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
-  callApi("/telegram/status","GET").then(function(info){
-
-    botReady=info.setup==="ready";
-    if(typeof info.bot_username==="string"&&/^[A-Za-z0-9_]{5,32}$/.test(info.bot_username))botUsername=info.bot_username;
-  }).catch(function(){/* Informational; no influence on signed reward access. */});
+  // Do not call bot diagnostics on every open; signed account loading is enough.
   loginTelegram();
 }
 setInterval(function(){renderFarming();if(tab==="earn")$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";},1000);
