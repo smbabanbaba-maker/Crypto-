@@ -16,6 +16,9 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 import re
+import secrets
+from typing import Literal
+from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -31,6 +34,16 @@ MAX_TELEGRAM_ID = 9223372036854775807
 # Existing mission IDs remain stable so earned rewards can never be claimed twice.
 # A mission is claimable only when its server-observable condition is satisfied.
 TASK_REWARDS = {"welcome": 30, "safety": 20, "profile": 15}
+# Stable IDs protect previously redeemed missions; edits never delete claim history.
+DEFAULT_MISSIONS = (
+    ("welcome", "Start your first farming cycle",
+     "Start a real 8-hour farming cycle to unlock the reward", "farm_start", 1, 30),
+    ("safety", "Claim your first farming reward",
+     "Complete your first 8-hour cycle and claim points", "farm_cycles", 1, 20),
+    ("profile", "Activate your first invited friend",
+     "Invite a friend who completes their first farming claim", "active_referrals", 1, 15),
+)
+MISSION_KINDS = {"farm_start", "farm_cycles", "active_referrals", "telegram_channel"}
 BOOST_PER_ACTIVE_REFERRAL = 2
 MAX_BOOST_PERCENT = 20
 
@@ -48,6 +61,56 @@ def task_eligibility(farm_start: int | None, farm_count: int, active_referrals: 
         "safety": farm_count > 0,
         "profile": active_referrals > 0,
     }
+
+def is_admin_id(user_id: int) -> bool:
+    """Strictly opt-in: nobody is an admin until the owner configures an ID."""
+    admin_id = os.environ.get("ZENQORY_ADMIN_TELEGRAM_ID", "").strip()
+    return admin_id.isdecimal() and str(user_id) == admin_id
+
+
+def require_admin(init_data: str) -> dict:
+    person = telegram_identity(init_data)
+    if not is_admin_id(person["id"]):
+        raise HTTPException(403, "Administrator access denied")
+    return person
+
+
+def mission_progress(kind: str, farm_start, farm_count: int, active_referrals: int) -> int:
+    if kind == "farm_start":
+        return int(farm_start is not None or farm_count > 0)
+    if kind == "farm_cycles":
+        return farm_count
+    if kind == "active_referrals":
+        return active_referrals
+    return 0  # Telegram channel membership is always verified at claim time.
+
+
+def valid_public_channel(value: str) -> tuple[str, str]:
+    """Accept only public Telegram channels with verifiable @username."""
+    raw = str(value or "").strip()
+    if raw.startswith("https://t.me/"):
+        raw = raw[len("https://t.me/"):].rstrip("/")
+    raw = raw.lstrip("@")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,31}", raw):
+        raise HTTPException(422, "Use a public Telegram channel username, e.g. @MyChannel")
+    return "@" + raw, "https://t.me/" + raw
+
+
+class MissionCreate(BaseModel):
+    name: str = Field(min_length=5, max_length=80)
+    description: str = Field(min_length=10, max_length=220)
+    kind: Literal["farm_cycles", "active_referrals", "telegram_channel"]
+    target: int = Field(default=1, ge=1, le=10000)
+    points: int = Field(ge=1, le=500)
+    channel: str = Field(default="", max_length=120)
+
+
+class MissionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=5, max_length=80)
+    description: str | None = Field(default=None, min_length=10, max_length=220)
+    points: int | None = Field(default=None, ge=1, le=500)
+    enabled: bool | None = None
+
 
 def trusted_telegram_photo(value) -> str | None:
     """Only Telegram HTTPS avatar URLs from cryptographically signed initData."""
@@ -179,6 +242,37 @@ def schema(conn):
             created_at BIGINT NOT NULL,
             expires_at BIGINT NOT NULL
         )""")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS zen_missions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            kind TEXT NOT NULL
+              CHECK (kind IN ('farm_start','farm_cycles','active_referrals','telegram_channel')),
+            target INTEGER NOT NULL DEFAULT 1 CHECK (target BETWEEN 1 AND 10000),
+            points INTEGER NOT NULL CHECK (points BETWEEN 1 AND 500),
+            channel TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL
+        )""")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS zen_admin_audit (
+            id BIGSERIAL PRIMARY KEY,
+            actor_id BIGINT NOT NULL,
+            action TEXT NOT NULL,
+            mission_id TEXT NOT NULL,
+            details TEXT NOT NULL,
+            created_at BIGINT NOT NULL
+        )""")
+        for mission_id, name, description, kind, target, points in DEFAULT_MISSIONS:
+            cursor.execute("""
+              INSERT INTO zen_missions
+              (id,name,description,kind,target,points,channel,url,enabled,created_at,updated_at)
+              VALUES(%s,%s,%s,%s,%s,%s,'','',TRUE,%s,%s)
+              ON CONFLICT (id) DO NOTHING
+            """, (mission_id, name, description, kind, target, points, utc_ms(), utc_ms()))
         cursor.execute("CREATE INDEX IF NOT EXISTS zen_referral_intents_expiry_idx ON zen_referral_intents(expires_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS zen_users_referrals_idx ON zen_users(referred_by)")
         cursor.execute("CREATE INDEX IF NOT EXISTS zen_activity_recent_idx ON zen_activity(user_id,id DESC)")
@@ -274,6 +368,11 @@ def get_snapshot(conn, user_id: int) -> dict:
         cursor.execute("SELECT task_id FROM zen_tasks WHERE user_id=%s", (user_id,))
         tasks = [x["task_id"] for x in cursor.fetchall()]
         cursor.execute("""
+          SELECT id,name,description,kind,target,points,channel,url
+          FROM zen_missions WHERE enabled=TRUE ORDER BY created_at,id LIMIT 100
+        """)
+        mission_rows = cursor.fetchall()
+        cursor.execute("""
           SELECT COUNT(*) AS n,
                  COUNT(*) FILTER (WHERE farm_count > 0) AS active_n
           FROM zen_users WHERE referred_by=%s
@@ -299,6 +398,21 @@ def get_snapshot(conn, user_id: int) -> dict:
         history = [{"type": x["activity_type"], "amount": x["points"],
                     "at": x["created_at"]} for x in cursor.fetchall()]
     active_referrals = int(active_referrals)
+    missions = [{
+        "id": row["id"],
+        "name": row["name"],
+        "desc": row["description"],
+        "kind": row["kind"],
+        "target": row["target"],
+        "reward": row["points"],
+        "link": row["url"],
+        "progress": min(int(row["target"]), mission_progress(
+            row["kind"], u["farm_start"], int(u["farm_count"]), active_referrals)),
+        "eligible": mission_progress(row["kind"], u["farm_start"], int(u["farm_count"]),
+                                      active_referrals) >= int(row["target"])
+            if row["kind"] != "telegram_channel" else False,
+        "verificationRequired": row["kind"] == "telegram_channel",
+    } for row in mission_rows]
     current_reward = int(u["farm_reward"]) if u["farm_start"] is not None else boosted_farm_reward(active_referrals)
     username = get_bot_username()
     return {
@@ -316,6 +430,8 @@ def get_snapshot(conn, user_id: int) -> dict:
         "taskEligibility": task_eligibility(u["farm_start"], int(u["farm_count"]), active_referrals),
         "lastDaily": u["last_daily"],
         "tasks": tasks,
+        "missions": missions,
+        "isAdmin": is_admin_id(user_id),
         "refCount": referrals,
         "activeRefCount": active_referrals,
         "refPoints": u["referral_points"],
