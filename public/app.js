@@ -7,12 +7,12 @@ var hasTelegramSession=!!(tg&&tg.initData),isTelegramClient=!!(tg&&tg.platform&&
 // Keep original mission IDs for backwards-compatible, once-only rewards.
 var tasks=[{id:"welcome",name:"Start your first farming cycle",desc:"Start a real 8-hour cycle to unlock this reward",reward:30,icon:"i-lightning"},{id:"safety",name:"Claim your first farming reward",desc:"Complete an 8-hour cycle and claim your points",reward:20,icon:"i-shield"},{id:"profile",name:"Activate your first invited friend",desc:"Invite a friend who completes their first farm claim",reward:15,icon:"i-friends"}];
 var $=function(id){return document.getElementById(id);};
-var empty=function(){return{balance:0,farmStart:null,farmCount:0,farmReward:80,nextFarmReward:80,miningBoostPercent:0,maxMiningBoostPercent:20,taskEligibility:{welcome:false,safety:false,profile:false},lastDaily:null,tasks:[],refCount:0,activeRefCount:0,refPoints:0,firstName:"Explorer",photoUrl:null,referralMembers:[],id:"Preview",history:[]};};
+var empty=function(){return{balance:0,farmStart:null,farmCount:0,farmReward:80,nextFarmReward:80,miningBoostPercent:0,maxMiningBoostPercent:20,taskEligibility:{welcome:false,safety:false,profile:false},lastDaily:null,tasks:[],refCount:0,activeRefCount:0,refPoints:0,firstName:"Explorer",photoUrl:null,referralMembers:[],missions:null,isAdmin:false,id:"Preview",history:[]};};
 var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var telegramVerified=false,accountReady=false,connectionIssue="",lastRefreshAt=0,refreshing=false;var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
 var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'"></use></svg>';};
 var now=function(){return Date.now();};
-function normalize(data){if(!data||typeof data!=="object")return;state=Object.assign({},state,data);if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.history))state.history=[];if(!Array.isArray(state.referralMembers))state.referralMembers=[];if(typeof data.referralLink==="string")referralLink=data.referralLink;if(typeof data.referralBotLink==="string")referralBotLink=data.referralBotLink;}
+function normalize(data){if(!data||typeof data!=="object")return;state=Object.assign({},state,data);if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.history))state.history=[];if(!Array.isArray(state.referralMembers))state.referralMembers=[];if(!Array.isArray(state.missions))state.missions=null;if(typeof data.referralLink==="string")referralLink=data.referralLink;if(typeof data.referralBotLink==="string")referralBotLink=data.referralBotLink;}
 function previewKey(){var user=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;return user&&user.id?"zenqory-v3-demo-"+String(user.id):"zenqory-v3-demo";}
 function loadPreview(){state=empty();var person=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;try{normalize(JSON.parse(localStorage.getItem(previewKey())||"null"));}catch(e){}if(person&&person.first_name)state.firstName=String(person.first_name).slice(0,60);if(person)state.photoUrl=safeAvatarURL(person.photo_url);referralLink=APP_URL;referralBotLink="";DEMO=true;render();}
 function persist(){if(DEMO){try{localStorage.setItem(previewKey(),JSON.stringify(state));}catch(e){}}}
@@ -32,7 +32,7 @@ function connectionSummary(){
 function closeModal(){$("modal-backdrop").hidden=true;}
 function clock(ms){var sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return[String(h).padStart(2,"0"),String(m).padStart(2,"0"),String(s).padStart(2,"0")].join(":");}
 function record(type,amount){state.history.unshift({type:type,amount:amount,at:Date.now()});state.history=state.history.slice(0,15);}
-async function callApi(path,method){var response=await fetch("/api"+path,{method:method||"GET",headers:{"X-Telegram-Init-Data":tg&&tg.initData?tg.initData:"","Content-Type":"application/json"}});var body;try{body=await response.json();}catch(e){throw new Error("Service returned an unexpected response");}if(!response.ok){var error=new Error(body.detail||"Request failed");error.status=response.status;throw error;}return body;}
+async function callApi(path,method,payload){var response=await fetch("/api"+path,{method:method||"GET",headers:{"X-Telegram-Init-Data":tg&&tg.initData?tg.initData:"","Content-Type":"application/json"},body:payload===undefined?undefined:JSON.stringify(payload)});var body;try{body=await response.json();}catch(e){throw new Error("Service returned an unexpected response");}if(!response.ok){var error=new Error(body.detail||"Request failed");error.status=response.status;throw error;}return body;}
 async function perform(path,demoAction,success){if(busy)return;if(!DEMO&&!accountReady){openTab("profile");notice("Reconnect Telegram before claiming rewards.");return;}busy=true;try{if(DEMO){demoAction();persist();}else{normalize(await callApi(path,"POST"));}render();notice(success);}catch(e){notice(e.message||"Something went wrong");}finally{busy=false;renderFarming();}}
 async function refreshLiveState(){
   if(DEMO||!accountReady||busy||refreshing||now()-lastRefreshAt<30000)return;
@@ -49,7 +49,7 @@ async function refreshLiveState(){
     }
   }finally{refreshing=false;}
 }
-function openTab(name){if(["home","earn","friends","wallet","profile"].indexOf(name)<0)return;tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});var page=document.querySelector(".screen.active");if(page){page.scrollTop=0;}try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}if(name==="friends"||name==="home"||name==="earn")refreshLiveState();}
+function openTab(name){if(["home","earn","friends","wallet","profile","admin"].indexOf(name)<0)return;if(name==="admin"&&(!accountReady||!state.isAdmin)){notice("Administrator access is restricted.");return;}tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});var page=document.querySelector(".screen.active");if(page){page.scrollTop=0;}try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}if(name==="friends"||name==="home"||name==="earn")refreshLiveState();if(name==="admin")loadAdminOverview();}
 function renderFarming(){var begin=state.farmStart,elapsed=begin===null?0:Math.max(0,now()-begin),progress=begin===null?0:Math.min(100,100*elapsed/FARM_MS),ready=begin!==null&&elapsed>=FARM_MS;
 $("farm-timer").textContent=begin===null?"08:00:00":ready?"00:00:00":clock(FARM_MS-elapsed);
 $("farm-caption").textContent=begin===null?"AWAITING ACTIVATION":ready?"REWARD READY":"FARMING PROTOCOL ACTIVE";
@@ -68,6 +68,7 @@ if(DEMO&&begin!==null&&!ready){if(!demoFinish){demoFinish=document.createElement
 var dailyReady=!state.lastDaily||now()-state.lastDaily>=DAILY_MS;
 $("daily-card").disabled=busy||(!DEMO&&!accountReady)||!dailyReady;$("daily-status").textContent=dailyReady?"READY TO CLAIM":"NEXT IN "+clock(DAILY_MS-(now()-state.lastDaily));$("daily-sub").textContent=dailyReady?"Collect +20 daily points":"Already claimed this cycle";
 }
+function missionCatalog(){return !DEMO&&Array.isArray(state.missions)?state.missions:tasks;}
 function missionUnlocked(id){
   if(DEMO){
     if(id==="welcome")return state.farmStart!==null||Number(state.farmCount)>0;
@@ -75,15 +76,59 @@ function missionUnlocked(id){
     if(id==="profile")return Number(state.activeRefCount)>0;
     return false;
   }
-  return !!(state.taskEligibility&&state.taskEligibility[id]);
+  var mission=missionCatalog().find(function(item){return item.id===id;});
+  return !!(mission&&(mission.eligible||mission.verificationRequired));
 }
-function renderMissions(){var claimed=state.tasks||[],count=tasks.filter(function(t){return claimed.indexOf(t.id)!==-1;}).length,html="";
-tasks.forEach(function(t){
-  var done=claimed.indexOf(t.id)!==-1,unlocked=missionUnlocked(t.id),claimable=unlocked&&(DEMO||accountReady);
-  var label=done?"DONE ✓":claimable?"CLAIM":unlocked?"CONNECT":"LOCKED";
-  html+='<article class="mission-item '+(!done&&!unlocked?'mission-locked':'')+'"><span class="mission-icon">'+logoIcon(t.icon)+'</span><div class="mission-info"><strong>'+t.name+'</strong><small>'+t.desc+'</small><em>+'+t.reward+' ZNQY POINTS · '+(done?'REWARDED':unlocked?'VERIFIED':'COMPLETE TO UNLOCK')+'</em></div><button class="mission-btn" data-claim-task="'+t.id+'" '+(!claimable?'disabled':'')+'>'+label+'</button></article>';
-});
-$("mission-list").innerHTML=html;$("mission-done").textContent=count;$("mission-progress").style.width=(count/tasks.length*100)+"%";$("mission-signal").textContent=count+"/"+tasks.length+" COMPLETE";$("earn-done").textContent=count+"/"+tasks.length;$("quick-tasks").textContent=count+" / "+tasks.length+" COMPLETED";$("earn-farm").textContent=fmt(state.farmCount);$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";}
+function renderMissions(){
+  var claimed=Array.isArray(state.tasks)?state.tasks:[],catalog=missionCatalog();
+  var count=catalog.filter(function(t){return claimed.indexOf(t.id)!==-1;}).length;
+  var root=$("mission-list");root.replaceChildren();
+  catalog.forEach(function(t){
+    var done=claimed.indexOf(t.id)!==-1;
+    var unlocked=missionUnlocked(t.id),claimable=unlocked&&(DEMO||accountReady)&&!done;
+    var verified=!!t.verificationRequired,link=safeMissionLink(t.link||"");
+    var item=document.createElement("article");
+    item.className="mission-item"+(!done&&!unlocked?" mission-locked":"");
+    var icon=document.createElement("span");icon.className="mission-icon";
+    var iconName=t.kind==="active_referrals"?"i-friends":t.kind==="telegram_channel"?"i-link":
+      t.kind==="farm_cycles"?"i-lightning":t.icon==="i-shield"?"i-shield":"i-lightning";
+    icon.innerHTML=logoIcon(iconName);
+    var info=document.createElement("div");info.className="mission-info";
+    var title=document.createElement("strong");title.textContent=String(t.name||"Verified mission");
+    var desc=document.createElement("small");desc.textContent=String(t.desc||"Complete the task to earn points");
+    var reward=document.createElement("em");
+    var progress=t.target?(" · "+fmt(t.progress||0)+"/"+fmt(t.target)+" VERIFIED"):"";
+    reward.textContent="+"+fmt(t.reward)+" ZNQY POINTS · "+(done?"REWARDED":verified?"CHECK MEMBERSHIP":unlocked?"READY TO CLAIM":"COMPLETE TO UNLOCK")+(!done&&!verified?progress:"");
+    info.append(title,desc,reward);
+    if(link&&verified&&!done){
+      var go=document.createElement("a");go.className="mission-channel-link";go.href=link;
+      go.target="_blank";go.rel="noopener noreferrer";go.textContent="OPEN CHANNEL";
+      info.appendChild(go);
+    }
+    var button=document.createElement("button");button.type="button";button.className="mission-btn";
+    button.dataset.claimTask=t.id;
+    button.disabled=!claimable;
+    button.textContent=done?"DONE ✓":claimable?(verified?"VERIFY":"CLAIM"):unlocked?"CONNECT":"LOCKED";
+    item.append(icon,info,button);root.appendChild(item);
+  });
+  if(!catalog.length){
+    var emptyMessage=document.createElement("p");emptyMessage.className="mission-empty";
+    emptyMessage.textContent="No active missions. Check back for verified tasks.";
+    root.appendChild(emptyMessage);
+  }
+  $("mission-done").textContent=count;
+  $("mission-total").textContent="/ "+catalog.length;
+  $("mission-progress").style.width=(catalog.length?count/catalog.length*100:0)+"%";
+  $("mission-signal").textContent=count+"/"+catalog.length+" COMPLETE";
+  $("earn-done").textContent=count+"/"+catalog.length;
+  $("quick-tasks").textContent=count+" / "+catalog.length+" COMPLETED";
+  $("earn-farm").textContent=fmt(state.farmCount);
+  $("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";
+}
+function safeMissionLink(value){
+  if(typeof value!=="string"||!/^https:\/\/t\.me\/[A-Za-z][A-Za-z0-9_]{4,31}\/?$/.test(value))return "";
+  return value;
+}
 function renderActivity(){var entries=state.history||[];var box=$("activity-list");if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
 function renderMiningBoost(){
   var active=Math.max(0,Number(state.activeRefCount)||0);
@@ -192,10 +237,10 @@ function renderCyber(){
   if(!entries.length){feed.innerHTML='<div class="signal-entry signal-empty">'+logoIcon("i-spark")+'<span>Your reward activity will appear here after your first claim.</span></div>';}
   else{feed.replaceChildren();entries.forEach(function(row){var el=document.createElement("div");el.className="signal-entry";var ico=document.createElement("span");ico.className="signal-entry-icon";ico.innerHTML=logoIcon("i-spark");var label=document.createElement("span");label.className="signal-entry-label";label.textContent=String(row.type||"Reward");var amount=document.createElement("strong");amount.textContent="+"+fmt(row.amount)+" PTS";el.append(ico,label,amount);feed.appendChild(el);});}
 }
-function render(){document.querySelectorAll("[data-balance]").forEach(function(node){node.textContent=fmt(state.balance);});var name=String(state.firstName||"Explorer").slice(0,55);$("profile-name").textContent=name;$("profile-initial").textContent=(name[0]||"Z").toUpperCase();$("profile-farms").textContent=fmt(state.farmCount);$("profile-friends").textContent=fmt(state.refCount);$("top-level").textContent=Math.max(1,1+Math.floor((state.farmCount||0)/5));$("profile-member").textContent=DEMO?"PREVIEW MEMBER":accountReady?"TELEGRAM MEMBER #"+String(state.id).slice(-6):"SECURE LOGIN REQUIRED";$("friends-total").textContent=fmt(state.refCount);$("friends-active").textContent=fmt(state.activeRefCount||0);$("friends-points").textContent=fmt(state.refPoints);$("quick-referrals").textContent=fmt(state.refCount)+" FRIENDS JOINED";$("referral-code").textContent=referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite";$("copy-referral").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-button").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-bot-button").disabled=!referralBotLink||!accountReady;$("connection-card").hidden=DEMO||accountReady;$("connection-help").textContent=connectionSummary();renderFarming();renderMissions();renderActivity();renderCyber();renderMiningBoost();renderNetwork();}
+function render(){document.querySelectorAll("[data-balance]").forEach(function(node){node.textContent=fmt(state.balance);});var name=String(state.firstName||"Explorer").slice(0,55);$("profile-name").textContent=name;$("profile-initial").textContent=(name[0]||"Z").toUpperCase();$("profile-farms").textContent=fmt(state.farmCount);$("profile-friends").textContent=fmt(state.refCount);$("top-level").textContent=Math.max(1,1+Math.floor((state.farmCount||0)/5));$("profile-member").textContent=DEMO?"PREVIEW MEMBER":accountReady?"TELEGRAM MEMBER #"+String(state.id).slice(-6):"SECURE LOGIN REQUIRED";$("friends-total").textContent=fmt(state.refCount);$("friends-active").textContent=fmt(state.activeRefCount||0);$("friends-points").textContent=fmt(state.refPoints);$("quick-referrals").textContent=fmt(state.refCount)+" FRIENDS JOINED";$("referral-code").textContent=referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite";$("copy-referral").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-button").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-bot-button").disabled=!referralBotLink||!accountReady;$("connection-card").hidden=DEMO||accountReady;$("connection-help").textContent=connectionSummary();$("admin-entry").hidden=!(accountReady&&state.isAdmin);renderFarming();renderMissions();renderActivity();renderCyber();renderMiningBoost();renderNetwork();}
 async function startOrClaim(){if(state.farmStart===null){await perform("/farm/start",function(){state.farmStart=now();state.farmReward=Number(state.nextFarmReward)||80;},"Farming activated. Your 8-hour cycle has started.");}else if(now()-state.farmStart>=FARM_MS){var reward=Math.max(80,Math.min(96,Number(state.farmReward)||80));await perform("/farm/claim",function(){state.farmStart=null;state.farmCount+=1;state.balance+=reward;record("Farming reward",reward);},"Success! You claimed "+reward+" ZENQORY points.");}}
 function claimDaily(){if(state.lastDaily&&now()-state.lastDaily<DAILY_MS)return;perform("/daily",function(){state.lastDaily=now();state.balance+=20;record("Daily reward",20);},"+20 points added to your rewards balance");}
-function claimTask(id){var task=tasks.find(function(t){return t.id===id;});if(!task||state.tasks.indexOf(id)!==-1)return;
+function claimTask(id){var task=missionCatalog().find(function(t){return t.id===id;});if(!task||state.tasks.indexOf(id)!==-1)return;
 if(!missionUnlocked(id)){modal("Mission not completed","Complete the mission's stated requirement before claiming the bonus. Rewards are verified on the server.");return;}
 perform("/tasks/"+id,function(){state.tasks.push(id);state.balance+=task.reward;record(task.name,task.reward);},"Verified mission complete! +"+task.reward+" points");}
 function share(){if(!referralLink){modal("Open inside Telegram","Your personal invite link appears after opening ZENQORY through your official Telegram Mini App.");return;}if(DEMO)notice("Preview share: bonuses are not tracked yet.");var uri="https://t.me/share/url?url="+encodeURIComponent(referralLink)+"&text="+encodeURIComponent("Join ZENQORY — an early digital rewards community.");try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}catch(e){window.open(uri,"_blank","noopener,noreferrer");}}
