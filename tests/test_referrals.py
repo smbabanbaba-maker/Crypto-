@@ -42,8 +42,21 @@ def headers(user_id, start_param=None):
 class RewardsAndReferrals(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if not os.environ.get("DATABASE_URL"):
+        dsn = os.environ.get("DATABASE_URL", "")
+        if not dsn:
             raise unittest.SkipTest("DATABASE_URL not provided; PostgreSQL integration test requires isolated CI service")
+        # These tests TRUNCATE their database. Fail closed if someone has copied
+        # real Neon/Vercel credentials into their local environment by mistake.
+        from urllib.parse import urlsplit
+        parsed = urlsplit(dsn)
+        if (os.environ.get("ZENQORY_ALLOW_DESTRUCTIVE_TESTS") != "1"
+                or parsed.scheme not in ("postgres", "postgresql")
+                or parsed.hostname not in ("localhost", "127.0.0.1", "::1")
+                or parsed.path != "/zenqory_test"):
+            raise RuntimeError(
+                "Refusing destructive integration tests: use only the local "
+                "zenqory_test PostgreSQL database with explicit test opt-in"
+            )
         os.environ["BOT_TOKEN"] = TEST_BOT_TOKEN
         os.environ["BOT_USERNAME"] = "ZenqoryTestBot"
         server._schema_ready = False
@@ -170,6 +183,24 @@ class RewardsAndReferrals(unittest.TestCase):
             statuses = list(pool.map(do_claim, range(2)))
         self.assertEqual(sorted(statuses), [200, 409])
         self.assertEqual(self.client.get("/api/me", headers=hdr).json()["balance"], server.DAILY_REWARD)
+
+    def test_simultaneous_farm_claims_only_one_succeeds(self):
+        hdr = headers(INVITER)
+        self.assertEqual(self.client.get("/api/me", headers=hdr).status_code, 200)
+        self.assertEqual(self.client.post("/api/farm/start", headers=hdr).status_code, 200)
+        future = int(time.time() * 1000) + server.FARM_MS + 2000
+
+        def do_claim(_):
+            with TestClient(server.app) as client:
+                return client.post("/api/farm/claim", headers=hdr).status_code
+
+        with patch.object(server, "utc_ms", return_value=future):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                statuses = list(pool.map(do_claim, range(2)))
+        self.assertEqual(sorted(statuses), [200, 409])
+        snapshot = self.client.get("/api/me", headers=hdr).json()
+        self.assertEqual(snapshot["balance"], server.FARM_REWARD)
+        self.assertEqual(snapshot["farmCount"], 1)
 
     def test_webhook_rejects_forged_requests(self):
         invalid = self.client.post(
