@@ -197,6 +197,24 @@ def health():
     return {"status": "ok", "name": "ZENQORY", "mode": "off-chain-points"}
 
 
+@app.get("/api/db/status", include_in_schema=False)
+def database_health():
+    """Minimal PostgreSQL connectivity probe without exposing secrets.
+
+    This endpoint does not create user accounts or award any reward points.
+    """
+    if not os.environ.get("DATABASE_URL"):
+        return {"database": "not_configured", "connected": False}
+    try:
+        with connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1 AS ok")
+                status = cursor.fetchone()
+        return {"database": "neon_postgres", "connected": bool(status and status.get("ok") == 1)}
+    except Exception:
+        return {"database": "unavailable", "connected": False}
+
+
 @app.get("/api/me")
 def me(x_telegram_init_data: str = Header(default="")):
     person = telegram_identity(x_telegram_init_data)
