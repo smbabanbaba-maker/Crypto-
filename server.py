@@ -698,6 +698,16 @@ def admin_overview(x_telegram_init_data: str = Header(default="")):
                 "joinedAt": x["created_at"],
             } for x in cursor.fetchall()]
             cursor.execute("""
+              SELECT a.activity_type,a.points,a.created_at,u.first_name
+              FROM zen_activity a
+              JOIN zen_users u ON u.id=a.user_id
+              ORDER BY a.id DESC LIMIT 20
+            """)
+            recent_rewards = [{
+                "type": x["activity_type"], "points": x["points"],
+                "name": x["first_name"], "at": x["created_at"],
+            } for x in cursor.fetchall()]
+            cursor.execute("""
               SELECT action,mission_id,details,created_at
               FROM zen_admin_audit ORDER BY id DESC LIMIT 15
             """)
@@ -717,6 +727,7 @@ def admin_overview(x_telegram_init_data: str = Header(default="")):
         },
         "missions": missions,
         "recentUsers": recent_users,
+        "recentRewards": recent_rewards,
         "audit": audit,
     }
 
