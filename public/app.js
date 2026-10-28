@@ -26,7 +26,7 @@ function connectionSummary(){
   if(accountReady)return "Telegram identity verified. Your reward points are securely stored on the server.";
   if(telegramVerified)return "Your Telegram identity is verified, but your rewards account is temporarily unavailable. Tap Retry Secure Login in Profile.";
   if(connectionIssue)return connectionIssue;
-  return "ZENQORY is running in preview mode. Demo points are stored locally on this device.";
+  return DEMO?"Browser preview: points are stored only on this device.":"Checking your secure Telegram session and reward storage.";
 }
 function closeModal(){$("modal-backdrop").hidden=true;}
 function clock(ms){var sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return[String(h).padStart(2,"0"),String(m).padStart(2,"0"),String(s).padStart(2,"0")].join(":");}
