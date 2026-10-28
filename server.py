@@ -285,11 +285,9 @@ def health():
 
 
 @app.get("/api/db/status", include_in_schema=False)
-def database_health():
-    """Minimal PostgreSQL connectivity probe without exposing secrets.
-
-    This endpoint does not create user accounts or award any reward points.
-    """
+def database_health(x_telegram_init_data: str = Header(default="")):
+    """Authenticated database probe. Never allow anonymous traffic to spend DB connections."""
+    telegram_identity(x_telegram_init_data)
     if not os.environ.get("DATABASE_URL"):
         return {"database": "not_configured", "connected": False}
     try:
@@ -507,8 +505,11 @@ def telegram_verify(x_telegram_init_data: str = Header(default="")):
 
 @app.post("/api/telegram/activate", include_in_schema=False)
 def activate_telegram(x_telegram_init_data: str = Header(default="")):
-    """Secure one-time setup after launch from the actual Telegram Mini App."""
-    telegram_identity(x_telegram_init_data)
+    """Administrative bot configuration, protected against user-triggered changes."""
+    person = telegram_identity(x_telegram_init_data)
+    admin_id = os.environ.get("ZENQORY_ADMIN_TELEGRAM_ID", "").strip()
+    if not admin_id or str(person["id"]) != admin_id:
+        raise HTTPException(403, "Bot administration is restricted")
     return _setup_telegram_bot()
 
 
@@ -611,12 +612,9 @@ async def telegram_webhook(request: Request,
 
 
 @app.get("/api/telegram/status", include_in_schema=False)
-def telegram_status():
-    """Safe one-click bot diagnostics + one-time automatic webhook configuration.
-
-    The webhook URL, commands and menu button are hardcoded for this project.
-    This endpoint never returns a token or arbitrary Telegram chat/user data.
-    """
+def telegram_status(x_telegram_init_data: str = Header(default="")):
+    """Read-only bot diagnostics visible only to authenticated Telegram members."""
+    telegram_identity(x_telegram_init_data)
     token = os.environ.get("BOT_TOKEN", "").strip()
     response = {
         "app": "ZENQORY",
