@@ -54,8 +54,10 @@ def telegram_identity(raw: str) -> dict:
         if abs(int(time.time()) - date) > 86400:
             raise ValueError("Your session expired; reopen the Telegram Mini App")
         secret = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
-        # hash and third-party signature must not enter the HMAC data-check-string.
-        check_str = "\n".join(f"{k}={v}" for k, v in sorted(pairs) if k not in ("hash", "signature"))
+        # Telegram bot-token HMAC covers ALL fields except hash, including
+        # the newer Ed25519 "signature" field when Telegram supplies it.
+        # Only third-party Ed25519 validation excludes both hash and signature.
+        check_str = "\n".join(f"{k}={v}" for k, v in sorted(pairs) if k != "hash")
         expected = hmac.new(secret, check_str.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, received):
             raise ValueError("Invalid Telegram authentication")
