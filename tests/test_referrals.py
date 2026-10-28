@@ -168,10 +168,17 @@ class RewardsAndReferrals(unittest.TestCase):
         )
         self.assertEqual(invalid.status_code, 403)
 
-    def test_database_health(self):
-        health = self.client.get("/api/db/status")
-        self.assertEqual(health.status_code, 200)
+    def test_database_health_is_authenticated(self):
+        self.assertEqual(self.client.get("/api/db/status").status_code, 401)
+        self.assertEqual(self.client.get("/api/telegram/status").status_code, 401)
+        health = self.client.get("/api/db/status", headers=headers(INVITER))
+        self.assertEqual(health.status_code, 200, health.text)
         self.assertTrue(health.json()["connected"])
+
+    def test_bot_configuration_is_admin_only(self):
+        # A signed normal account cannot reset webhooks or menu settings.
+        response = self.client.post("/api/telegram/activate", headers=headers(INVITER))
+        self.assertEqual(response.status_code, 403)
 
 
 if __name__ == "__main__":
