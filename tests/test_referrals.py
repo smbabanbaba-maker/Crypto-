@@ -166,12 +166,87 @@ class RewardsAndReferrals(unittest.TestCase):
         daily = self.client.post("/api/daily", headers=hdr)
         self.assertEqual(daily.status_code, 200, daily.text)
         self.assertEqual(self.client.post("/api/daily", headers=hdr).status_code, 409)
+        # Mere clicks cannot generate rewards. Server-recorded progress is required.
+        for task_id in server.TASK_REWARDS:
+            self.assertEqual(self.client.post(f"/api/tasks/{task_id}", headers=hdr).status_code, 409)
+        self.assertEqual(self.client.post("/api/farm/start", headers=hdr).status_code, 200)
         task = self.client.post("/api/tasks/welcome", headers=hdr)
         self.assertEqual(task.status_code, 200, task.text)
         self.assertEqual(self.client.post("/api/tasks/welcome", headers=hdr).status_code, 409)
+        self.assertEqual(self.client.post("/api/tasks/safety", headers=hdr).status_code, 409)
+        self.assertEqual(self.client.post("/api/tasks/profile", headers=hdr).status_code, 409)
         self.assertEqual(self.client.post("/api/tasks/unknown", headers=hdr).status_code, 404)
         balance = self.client.get("/api/me", headers=hdr).json()["balance"]
         self.assertEqual(balance, server.DAILY_REWARD + server.TASK_REWARDS["welcome"])
+
+    def test_verified_mission_progress_and_rewards(self):
+        inviter = headers(INVITER)
+        invitee = headers(INVITEE, f"ref_{INVITER}")
+        self.assertEqual(self.client.get("/api/me", headers=inviter).status_code, 200)
+        self.assertEqual(self.client.get("/api/me", headers=invitee).status_code, 200)
+        self.assertEqual(self.client.post("/api/tasks/safety", headers=inviter).status_code, 409)
+        self.assertEqual(self.client.post("/api/tasks/profile", headers=inviter).status_code, 409)
+        initial = self.client.get("/api/me", headers=inviter).json()
+        self.assertFalse(initial["taskEligibility"]["welcome"])
+        self.assertFalse(initial["taskEligibility"]["safety"])
+        self.assertFalse(initial["taskEligibility"]["profile"])
+
+        self.assertEqual(self.client.post("/api/farm/start", headers=inviter).status_code, 200)
+        self.assertEqual(self.client.get("/api/me", headers=inviter).json()["taskEligibility"]["welcome"], True)
+        self.assertEqual(self.client.post("/api/tasks/welcome", headers=inviter).status_code, 200)
+        self.assertEqual(self.client.post("/api/tasks/safety", headers=inviter).status_code, 409)
+        self.assertEqual(self.client.post("/api/farm/start", headers=invitee).status_code, 200)
+        future = int(time.time() * 1000) + server.FARM_MS + 2500
+        with patch.object(server, "utc_ms", return_value=future):
+            self.assertEqual(self.client.post("/api/farm/claim", headers=inviter).status_code, 200)
+            self.assertEqual(self.client.post("/api/farm/claim", headers=invitee).status_code, 200)
+        self.assertEqual(self.client.post("/api/tasks/safety", headers=inviter).status_code, 200)
+        self.assertEqual(self.client.post("/api/tasks/profile", headers=inviter).status_code, 200)
+        self.assertEqual(self.client.post("/api/tasks/profile", headers=inviter).status_code, 409)
+        state = self.client.get("/api/me", headers=inviter).json()
+        self.assertEqual(state["activeRefCount"], 1)
+        self.assertTrue(all(state["taskEligibility"].values()))
+        self.assertEqual(state["balance"], 80 + 10 + 30 + 20 + 15)
+
+    def test_referral_boost_is_capped_and_locked_when_cycle_starts(self):
+        inviter = headers(INVITER)
+        self.assertEqual(self.client.get("/api/me", headers=inviter).status_code, 200)
+        started = self.client.post("/api/farm/start", headers=inviter)
+        self.assertEqual(started.status_code, 200)
+        self.assertEqual(started.json()["farmReward"], 80)
+
+        for idx in range(11):
+            newcomer = headers(12000200 + idx, f"ref_{INVITER}")
+            self.assertEqual(self.client.get("/api/me", headers=newcomer).status_code, 200)
+            self.assertEqual(self.client.post("/api/farm/start", headers=newcomer).status_code, 200)
+        future = int(time.time() * 1000) + server.FARM_MS + 2200
+        with patch.object(server, "utc_ms", return_value=future):
+            for idx in range(11):
+                newcomer = headers(12000200 + idx)
+                self.assertEqual(self.client.post("/api/farm/claim", headers=newcomer).status_code, 200)
+            boosted = self.client.get("/api/me", headers=inviter).json()
+            self.assertEqual(boosted["activeRefCount"], 11)
+            self.assertEqual(boosted["miningBoostPercent"], 20)
+            self.assertEqual(boosted["nextFarmReward"], 96)
+            # Referral growth never changes an already active cycle's payout.
+            self.assertEqual(boosted["farmReward"], 80)
+            claimed = self.client.post("/api/farm/claim", headers=inviter)
+            self.assertEqual(claimed.status_code, 200)
+        self.assertEqual(claimed.json()["balance"], 80 + 11 * server.REFERRAL_REWARD)
+        self.assertEqual(self.client.post("/api/farm/claim", headers=inviter).status_code, 409)
+        restarted = self.client.post("/api/farm/start", headers=inviter)
+        self.assertEqual(restarted.status_code, 200)
+        self.assertEqual(restarted.json()["farmReward"], 96)
+        self.assertEqual(restarted.json()["miningBoostPercent"], 20)
+
+    def test_boost_reward_rounding_and_boundaries(self):
+        self.assertEqual([server.boosted_farm_reward(i) for i in (0, 1, 3, 5, 10, 100)],
+                         [80, 82, 85, 88, 96, 96])
+        self.assertEqual(server.task_eligibility(None, 0, 0),
+                         {"welcome": False, "safety": False, "profile": False})
+        self.assertEqual(server.task_eligibility(100, 0, 0)["welcome"], True)
+        self.assertEqual(server.task_eligibility(None, 1, 1),
+                         {"welcome": True, "safety": True, "profile": True})
 
     def test_simultaneous_daily_claims_only_one_succeeds(self):
         hdr = headers(INVITER)
