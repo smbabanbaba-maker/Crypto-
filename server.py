@@ -28,7 +28,26 @@ DAILY_REWARD = 20
 REFERRAL_REWARD = 10
 REFERRAL_PENDING_MS = 7 * 24 * 60 * 60 * 1000
 MAX_TELEGRAM_ID = 9223372036854775807
+# Existing mission IDs remain stable so earned rewards can never be claimed twice.
+# A mission is claimable only when its server-observable condition is satisfied.
 TASK_REWARDS = {"welcome": 30, "safety": 20, "profile": 15}
+BOOST_PER_ACTIVE_REFERRAL = 2
+MAX_BOOST_PERCENT = 20
+
+
+def boosted_farm_reward(active_referrals: int) -> int:
+    """80 base points, +2% per active referral up to +20%; half-up to whole PTS."""
+    active = max(0, min(int(active_referrals), MAX_BOOST_PERCENT // BOOST_PER_ACTIVE_REFERRAL))
+    return FARM_REWARD + (FARM_REWARD * BOOST_PER_ACTIVE_REFERRAL * active + 50) // 100
+
+
+def task_eligibility(farm_start: int | None, farm_count: int, active_referrals: int) -> dict:
+    """Never award mission points based on an untrusted client-side click."""
+    return {
+        "welcome": farm_start is not None or farm_count > 0,
+        "safety": farm_count > 0,
+        "profile": active_referrals > 0,
+    }
 
 app = FastAPI(title="ZENQORY Rewards", docs_url=None, redoc_url=None, openapi_url=None)
 _schema_ready = False
@@ -109,6 +128,13 @@ def schema(conn):
             referral_points BIGINT NOT NULL DEFAULT 0,
             created_at BIGINT NOT NULL
         )""")
+        # Existing active farms keep their original 80-point reward. The
+        # reward for new cycles is frozen at the start of each cycle.
+        cursor.execute("""
+        ALTER TABLE zen_users
+          ADD COLUMN IF NOT EXISTS farm_reward INTEGER NOT NULL
+          DEFAULT 80 CHECK (farm_reward BETWEEN 80 AND 96)
+        """)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS zen_tasks (
             user_id BIGINT NOT NULL REFERENCES zen_users(id),
@@ -237,6 +263,8 @@ def get_snapshot(conn, user_id: int) -> dict:
         """, (user_id,))
         history = [{"type": x["activity_type"], "amount": x["points"],
                     "at": x["created_at"]} for x in cursor.fetchall()]
+    active_referrals = int(active_referrals)
+    current_reward = int(u["farm_reward"]) if u["farm_start"] is not None else boosted_farm_reward(active_referrals)
     username = get_bot_username()
     return {
         "id": str(u["id"]),
@@ -244,6 +272,11 @@ def get_snapshot(conn, user_id: int) -> dict:
         "balance": u["balance"],
         "farmStart": u["farm_start"],
         "farmCount": u["farm_count"],
+        "farmReward": current_reward,
+        "nextFarmReward": boosted_farm_reward(active_referrals),
+        "miningBoostPercent": min(active_referrals * BOOST_PER_ACTIVE_REFERRAL, MAX_BOOST_PERCENT),
+        "maxMiningBoostPercent": MAX_BOOST_PERCENT,
+        "taskEligibility": task_eligibility(u["farm_start"], int(u["farm_count"]), active_referrals),
         "lastDaily": u["last_daily"],
         "tasks": tasks,
         "refCount": referrals,
@@ -317,7 +350,16 @@ def start(x_telegram_init_data: str = Header(default="")):
             existing = cursor.fetchone()["farm_start"]
             if existing is not None:
                 raise HTTPException(409, "An active cycle already exists")
-            cursor.execute("UPDATE zen_users SET farm_start=%s WHERE id=%s", (utc_ms(), uid))
+            # Freeze the boost for this farming cycle. New active friends
+            # improve *future* cycles; the running cycle cannot be repriced.
+            cursor.execute("""
+              SELECT COUNT(*) AS n FROM zen_users WHERE referred_by=%s AND farm_count>0
+            """, (uid,))
+            active_referrals = cursor.fetchone()["n"]
+            reward = boosted_farm_reward(active_referrals)
+            cursor.execute("""
+              UPDATE zen_users SET farm_start=%s, farm_reward=%s WHERE id=%s
+            """, (utc_ms(), reward, uid))
         return get_snapshot(conn, uid)
 
 
@@ -328,17 +370,20 @@ def claim(x_telegram_init_data: str = Header(default="")):
         uid = ensure_user(conn, person)
         with conn.cursor() as cursor:
             cursor.execute("""
-              SELECT farm_start,farm_count,referred_by,referral_rewarded
+              SELECT farm_start,farm_reward,farm_count,referred_by,referral_rewarded
               FROM zen_users WHERE id=%s FOR UPDATE
             """, (uid,))
             u = cursor.fetchone()
             if u["farm_start"] is None or utc_ms()-u["farm_start"] < FARM_MS:
                 raise HTTPException(409, "This 8-hour cycle is not yet claimable")
+            # Row lock + transaction permit a single payout for each cycle.
+            # Only use the server-locked reward stored when farming began.
+            reward = int(u["farm_reward"])
             cursor.execute("""
-              UPDATE zen_users SET balance=balance+%s,farm_start=NULL,farm_count=farm_count+1
-              WHERE id=%s
-            """, (FARM_REWARD, uid))
-            activity(conn, uid, "Farming reward", FARM_REWARD)
+              UPDATE zen_users SET balance=balance+%s,farm_start=NULL,
+                farm_reward=%s,farm_count=farm_count+1 WHERE id=%s
+            """, (reward, FARM_REWARD, uid))
+            activity(conn, uid, "Farming reward", reward)
             if u["farm_count"] == 0 and u["referred_by"] and not u["referral_rewarded"]:
                 cursor.execute("""
                   UPDATE zen_users
@@ -375,6 +420,20 @@ def task_claim(task_id: str, x_telegram_init_data: str = Header(default="")):
     with session() as conn:
         uid = ensure_user(conn, person)
         with conn.cursor() as cursor:
+            # Claim eligibility is checked again in this database transaction;
+            # a user cannot earn anything by forging a JavaScript task action.
+            cursor.execute("""
+              SELECT farm_start,farm_count FROM zen_users WHERE id=%s FOR UPDATE
+            """, (uid,))
+            farm = cursor.fetchone()
+            cursor.execute("""
+              SELECT COUNT(*) AS n FROM zen_users
+              WHERE referred_by=%s AND farm_count>0
+            """, (uid,))
+            active_referrals = cursor.fetchone()["n"]
+            eligible = task_eligibility(farm["farm_start"], int(farm["farm_count"]), int(active_referrals))
+            if not eligible[task_id]:
+                raise HTTPException(409, "Complete the mission requirement before claiming points")
             cursor.execute("""
               INSERT INTO zen_tasks(user_id,task_id) VALUES(%s,%s)
               ON CONFLICT DO NOTHING RETURNING task_id
