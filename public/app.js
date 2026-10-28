@@ -2,11 +2,27 @@
 (function () {
 "use strict";
 var tg=window.Telegram&&window.Telegram.WebApp;
-try{if(tg){tg.ready();tg.expand();tg.setHeaderColor("#030605");tg.setBackgroundColor("#030605");}}catch(e){}
+try{if(tg){tg.expand();tg.setHeaderColor("#030605");tg.setBackgroundColor("#030605");}}catch(e){}
 var hasTelegramSession=!!(tg&&tg.initData),isTelegramClient=!!(tg&&tg.platform&&tg.platform!=="unknown"),DEMO=!hasTelegramSession&&!isTelegramClient,FARM_MS=8*60*60*1000,DAILY_MS=24*60*60*1000;
 // Keep original mission IDs for backwards-compatible, once-only rewards.
 var tasks=[{id:"welcome",name:"Start your first farming cycle",desc:"Start a real 8-hour cycle to unlock this reward",reward:30,icon:"i-lightning"},{id:"safety",name:"Claim your first farming reward",desc:"Complete an 8-hour cycle and claim your points",reward:20,icon:"i-shield"},{id:"profile",name:"Activate your first invited friend",desc:"Invite a friend who completes their first farm claim",reward:15,icon:"i-friends"}];
 var $=function(id){return document.getElementById(id);};
+var hasLaunched=false;
+function revealReadyApp(){
+  if(hasLaunched)return;
+  hasLaunched=true;
+  // Never expose zero-point placeholders before verified account data is ready.
+  document.body.classList.remove("zen-loading");
+  document.body.classList.add("zen-ready");
+  var splash=$("zen-launch-screen");
+  if(splash){splash.setAttribute("aria-hidden","true");setTimeout(function(){splash.hidden=true;},220);}
+  try{if(tg&&typeof tg.ready==="function")tg.ready();}catch(error){}
+}
+function setTextIfChanged(element,value){
+  if(!element)return;
+  var next=String(value);
+  if(element.textContent!==next)element.textContent=next;
+}
 var empty=function(){return{balance:0,farmStart:null,farmCount:0,farmReward:80,nextFarmReward:80,miningBoostPercent:0,maxMiningBoostPercent:20,taskEligibility:{welcome:false,safety:false,profile:false},lastDaily:null,tasks:[],refCount:0,activeRefCount:0,refPoints:0,firstName:"Explorer",photoUrl:null,referralMembers:[],missions:null,isAdmin:false,id:"Preview",history:[]};};
 var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var telegramVerified=false,accountReady=false,connectionIssue="",lastRefreshAt=0,refreshing=false;var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
@@ -14,7 +30,7 @@ var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'
 var now=function(){return Date.now();};
 function normalize(data){if(!data||typeof data!=="object")return;state=Object.assign({},state,data);if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.history))state.history=[];if(!Array.isArray(state.referralMembers))state.referralMembers=[];if(!Array.isArray(state.missions))state.missions=null;if(typeof data.referralLink==="string")referralLink=data.referralLink;if(typeof data.referralBotLink==="string")referralBotLink=data.referralBotLink;}
 function previewKey(){var user=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;return user&&user.id?"zenqory-v3-demo-"+String(user.id):"zenqory-v3-demo";}
-function loadPreview(){state=empty();var person=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;try{normalize(JSON.parse(localStorage.getItem(previewKey())||"null"));}catch(e){}if(person&&person.first_name)state.firstName=String(person.first_name).slice(0,60);if(person)state.photoUrl=safeAvatarURL(person.photo_url);referralLink=APP_URL;referralBotLink="";DEMO=true;render();}
+function loadPreview(){state=empty();var person=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;try{normalize(JSON.parse(localStorage.getItem(previewKey())||"null"));}catch(e){}if(person&&person.first_name)state.firstName=String(person.first_name).slice(0,60);if(person)state.photoUrl=safeAvatarURL(person.photo_url);referralLink=APP_URL;referralBotLink="";DEMO=true;render();revealReadyApp();}
 function persist(){if(DEMO){try{localStorage.setItem(previewKey(),JSON.stringify(state));}catch(e){}}}
 function notice(message){var box=$("toast");box.textContent=message;box.classList.add("visible");clearTimeout(toastTimeout);toastTimeout=setTimeout(function(){box.classList.remove("visible");},3300);}
 function modal(title,description){$("modal-title").textContent=title;$("modal-description").textContent=description;$("modal-backdrop").hidden=false;}
@@ -450,22 +466,22 @@ function setConnectionProblem(error){
     ?"Secure reward storage is unavailable. Please try again shortly."
     :"The secure rewards service is temporarily unavailable. Retry your Telegram connection.";
   sessionGuide("Secure login",description);
-  busy=false;render();
+  busy=false;render();openTab("profile");revealReadyApp();
 }
-async function loginTelegram(){
+async function loginTelegram(manualRetry){
   if(DEMO)return;
   if(!tg||!tg.initData){setConnectionProblem(new Error("Missing Telegram initData"));return;}
-  busy=true;render();
+  busy=true;
   try{
     var verified=await callApi("/telegram/verify","POST");
     telegramVerified=true;
     if(verified&&verified.first_name)state.firstName=String(verified.first_name).slice(0,60);
     var snapshot=await callApi("/me","GET");
-    normalize(snapshot);accountReady=true;DEMO=false;lastRefreshAt=now();hideSessionGuide();busy=false;render();
-    notice("Your secure Telegram rewards account is connected.");
+    normalize(snapshot);accountReady=true;DEMO=false;lastRefreshAt=now();hideSessionGuide();busy=false;render();revealReadyApp();
+    if(manualRetry)notice("Secure Telegram session restored.");
   }catch(error){setConnectionProblem(error);}
 }
-$("retry-login").addEventListener("click",loginTelegram);
+$("retry-login").addEventListener("click",function(){loginTelegram(true);});
 document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refreshLiveState();});
 if(DEMO){
   loadPreview();
@@ -473,7 +489,7 @@ if(DEMO){
 }else{
   if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
   // Do not call bot diagnostics on every open; signed account loading is enough.
-  loginTelegram();
+  loginTelegram(false);
 }
 setInterval(function(){renderFarming();if(tab==="earn")$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";},1000);
 })();
