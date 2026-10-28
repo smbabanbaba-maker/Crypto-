@@ -59,9 +59,8 @@ async function refreshLiveState(){
   }catch(error){
     // A fresh authorization failure must not silently leave a stale live balance.
     if(error&&error.status===401){
-      accountReady=false;state=empty();
-      sessionGuide("Secure login","Your Telegram session has expired. Reopen the official Mini App, then reconnect.");
-      render();
+      state=empty();
+      setConnectionProblem(error);
     }
   }finally{refreshing=false;}
 }
@@ -129,7 +128,14 @@ function missionUnlocked(id){
 function renderMissions(){
   var claimed=Array.isArray(state.tasks)?state.tasks:[],catalog=missionCatalog();
   var count=catalog.filter(function(t){return claimed.indexOf(t.id)!==-1;}).length;
-  var root=$("mission-list");root.replaceChildren();
+  var root=$("mission-list");
+  // Do not destroy and rebuild every mission card on an unchanged API snapshot.
+  var missionsKey=JSON.stringify([catalog,claimed,DEMO,accountReady,
+      DEMO?state.farmStart:null,DEMO?state.farmCount:null,
+      DEMO?state.activeRefCount:null]);
+  if(root.dataset.missionsKey!==missionsKey){
+    root.dataset.missionsKey=missionsKey;
+    root.replaceChildren();
   catalog.forEach(function(t){
     var done=claimed.indexOf(t.id)!==-1;
     var unlocked=missionUnlocked(t.id),claimable=unlocked&&(DEMO||accountReady)&&!done;
@@ -163,7 +169,8 @@ function renderMissions(){
     emptyMessage.textContent="No active missions. Check back for verified tasks.";
     root.appendChild(emptyMessage);
   }
-  $("mission-done").textContent=count;
+  }
+  setTextIfChanged($("mission-done"),count);
   $("mission-total").textContent="/ "+catalog.length;
   $("mission-progress").style.width=(catalog.length?count/catalog.length*100:0)+"%";
   $("mission-signal").textContent=count+"/"+catalog.length+" COMPLETE";
@@ -176,7 +183,11 @@ function safeMissionLink(value){
   if(typeof value!=="string"||!/^https:\/\/t\.me\/[A-Za-z][A-Za-z0-9_]{4,31}\/?$/.test(value))return "";
   return value;
 }
-function renderActivity(){var entries=state.history||[];var box=$("activity-list");if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
+function renderActivity(){var entries=state.history||[];var box=$("activity-list");
+var activityKey=JSON.stringify(entries.slice(0,8));
+if(box.dataset.activityKey===activityKey)return;
+box.dataset.activityKey=activityKey;
+if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
 function renderMiningBoost(){
   var active=Math.max(0,Number(state.activeRefCount)||0);
   var percent=DEMO?Math.min(20,active*2):Math.max(0,Math.min(20,Number(state.miningBoostPercent)||0));
@@ -184,7 +195,8 @@ function renderMiningBoost(){
   ["home","friends"].forEach(function(location){
     $(location+"-boost-percent").textContent="+"+percent+"%";
     $(location+"-boost-active").textContent=Math.min(10,active)+" / 10";
-    $(location+"-boost-reward").innerHTML=fmt(reward)+" <small>PTS / 8H</small>";
+    var boostLabel=fmt(reward)+" <small>PTS / 8H</small>";
+    if($(location+"-boost-reward").innerHTML!==boostLabel)$(location+"-boost-reward").innerHTML=boostLabel;
     $(location+"-boost-fill").style.width=percent*5+"%";
     $(location+"-boost-meter").setAttribute("aria-valuenow",String(percent));
     $(location+"-boost-hint").textContent=percent>=20
