@@ -11,6 +11,7 @@ import json
 import os
 import time
 from contextlib import contextmanager
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qsl
 import re
@@ -176,7 +177,7 @@ def get_snapshot(conn, user_id: int) -> dict:
         """, (user_id,))
         history = [{"type": x["activity_type"], "amount": x["points"],
                     "at": x["created_at"]} for x in cursor.fetchall()]
-    username = os.environ.get("BOT_USERNAME", "").strip().lstrip("@")
+    username = get_bot_username()
     return {
         "id": str(u["id"]),
         "firstName": u["first_name"],
@@ -190,6 +191,30 @@ def get_snapshot(conn, user_id: int) -> dict:
         "history": history,
         "referralLink": f"https://t.me/{username}?startapp=ref_{user_id}" if username else "",
     }
+
+
+
+@lru_cache(maxsize=1)
+def _verified_bot_username() -> str:
+    """Resolve this deployment's actual Telegram bot username from its token."""
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if not token:
+        return ""
+    try:
+        # Bot API verifies the supplied token and returns the bot's actual identity.
+        result = _bot_api("getMe", {}, token).get("result") or {}
+        name = result.get("username", "")
+        return name if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_]{5,32}", name) else ""
+    except Exception:
+        return ""
+
+
+def get_bot_username() -> str:
+    """Prefer an explicitly configured username, otherwise query Telegram once."""
+    configured = os.environ.get("BOT_USERNAME", "").strip().lstrip("@")
+    if re.fullmatch(r"[A-Za-z0-9_]{5,32}", configured):
+        return configured
+    return _verified_bot_username()
 
 
 @app.get("/api/health")
