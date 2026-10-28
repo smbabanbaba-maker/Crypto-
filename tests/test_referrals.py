@@ -20,16 +20,19 @@ INVITEE = 92001002
 SECOND_INVITER = 92001003
 
 
-def headers(user_id, start_param=None):
+def headers(user_id, start_param=None, *, photo_url=None, first_name="Explorer"):
     from urllib.parse import urlencode
     from test_telegram_auth import signed_init_data as sign
     import hashlib
     import hmac
     import json
 
+    user = {"id": user_id, "first_name": first_name}
+    if photo_url is not None:
+        user["photo_url"] = photo_url
     data = {
         "auth_date": str(int(time.time())),
-        "user": json.dumps({"id": user_id, "first_name": "Explorer"}, separators=(",", ":")),
+        "user": json.dumps(user, separators=(",", ":")),
     }
     if start_param:
         data["start_param"] = start_param
@@ -78,6 +81,50 @@ class RewardsAndReferrals(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
         self.assertEqual(r.headers["cache-control"], "no-store")
         self.assertEqual(r.headers["x-content-type-options"], "nosniff")
+
+    def test_referral_map_contains_only_own_telegram_friends_and_photos(self):
+        inviter_photo = "https://t.me/i/userpic/320/inviter.jpg"
+        invitee_photo = "https://t.me/i/userpic/320/invitee.jpg"
+        owner = self.client.get(
+            "/api/me", headers=headers(INVITER, photo_url=inviter_photo,
+                                       first_name="Inviter"))
+        self.assertEqual(owner.status_code, 200, owner.text)
+        self.assertEqual(owner.json()["photoUrl"], inviter_photo)
+        self.assertEqual(owner.json()["referralMembers"], [])
+
+        joined = self.client.get(
+            "/api/me", headers=headers(INVITEE, f"ref_{INVITER}",
+                                       photo_url=invitee_photo, first_name="Nura"))
+        self.assertEqual(joined.status_code, 200, joined.text)
+        # An invited member cannot access their inviter's referral map.
+        self.assertEqual(joined.json()["referralMembers"], [])
+        owner = self.client.get("/api/me", headers=headers(INVITER)).json()
+        self.assertEqual(owner["refCount"], 1)
+        self.assertEqual(owner["referralMembers"], [
+            {"firstName": "Nura", "photoUrl": invitee_photo, "active": False}
+        ])
+
+        self.assertEqual(
+            self.client.post("/api/farm/start", headers=headers(INVITEE)).status_code, 200
+        )
+        with patch.object(server, "utc_ms",
+                          return_value=int(time.time() * 1000) + server.FARM_MS + 2000):
+            self.assertEqual(
+                self.client.post("/api/farm/claim", headers=headers(INVITEE)).status_code, 200
+            )
+        owner = self.client.get("/api/me", headers=headers(INVITER)).json()
+        self.assertEqual(owner["referralMembers"][0]["active"], True)
+
+        # When Telegram stops supplying a photo, respect its privacy choice.
+        updated = self.client.get("/api/me", headers=headers(INVITEE))
+        self.assertEqual(updated.status_code, 200)
+        owner = self.client.get("/api/me", headers=headers(INVITER)).json()
+        self.assertIsNone(owner["referralMembers"][0]["photoUrl"])
+
+        # Someone else's unrelated Telegram account sees no such members.
+        outsider = self.client.get("/api/me", headers=headers(SECOND_INVITER))
+        self.assertEqual(outsider.status_code, 200)
+        self.assertEqual(outsider.json()["referralMembers"], [])
 
     def test_direct_miniapp_referral_first_claim_only(self):
         inv = self.client.get("/api/me", headers=headers(INVITER))
