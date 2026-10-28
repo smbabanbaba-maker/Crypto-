@@ -10,9 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="/styles.css?v=referral-dp-1" rel="stylesheet">
+  <link href="/styles.css?v=admin-v1" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/app.js?v=referral-dp-1" defer></script>
+  <script src="/app.js?v=admin-v1" defer></script>
 </head>
 <body>
 <svg class="svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -80,7 +80,7 @@
  </div>
  <div class="screen" id="screen-earn" data-screen="earn">
   <div class="page-heading"><span class="eyebrow"><span class="live-point"></span> REWARD PROTOCOL</span><h1>Earn more.<br><em>Grow faster.</em></h1><p>Complete verified missions to earn bonus points. Rewards unlock only after you finish each requirement.</p></div>
-  <div class="hero mission-hero hud-frame"><div class="zen-mission-target" aria-hidden="true"><i></i><i></i><i></i><span>◈</span></div><span class="hud-corner hud-tl"></span><span class="hud-corner hud-tr"></span><span class="overline">YOUR MISSION STATUS</span><div class="mission-big"><span id="mission-done">0</span><span>/ 3</span></div><h2>Every mission takes you further.</h2><div class="progress-track"><div id="mission-progress" class="progress-fill"></div></div><span class="hero-footnote">Complete missions to receive pre-launch points.</span><div class="mini-particles" aria-hidden="true"></div></div>
+  <div class="hero mission-hero hud-frame"><div class="zen-mission-target" aria-hidden="true"><i></i><i></i><i></i><span>◈</span></div><span class="hud-corner hud-tl"></span><span class="hud-corner hud-tr"></span><span class="overline">YOUR MISSION STATUS</span><div class="mission-big"><span id="mission-done">0</span><span id="mission-total">/ 3</span></div><h2>Every mission takes you further.</h2><div class="progress-track"><div id="mission-progress" class="progress-fill"></div></div><span class="hero-footnote">Complete missions to receive pre-launch points.</span><div class="mini-particles" aria-hidden="true"></div></div>
   <div class="mission-signal"><span>MISSION CHANNELS</span><div class="signal-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><strong id="mission-signal">0/3 READY</strong></div><div class="stat-strip"><div><svg><use href="#i-task"/></svg><strong id="earn-done">0/3</strong><span>TASKS DONE</span></div><div><svg><use href="#i-spark"/></svg><strong id="earn-farm">0</strong><span>CYCLES</span></div><div><svg><use href="#i-gift"/></svg><strong id="earn-daily">READY</strong><span>DAILY BONUS</span></div></div>
   <div class="dashboard-heading"><h3>AVAILABLE MISSIONS</h3><span class="tag-outline">PIONEER PHASE</span></div>
   <div id="mission-list" class="mission-list"></div>
@@ -117,6 +117,7 @@
   <div class="identity-tech-bar"><span>EXPLORER ID // <strong id="profile-code">PREVIEW</strong></span><span>PROFILE INTERFACE</span></div><div class="rank-rail"><div class="rank-rail-head"><span>EXPLORER PROGRESS</span><strong id="rank-goal">0 / 5 CYCLES</strong></div><div class="rank-rail-track"><span id="rank-fill"></span></div></div><div class="profile-stat-grid"><div><strong data-balance>0</strong><span>TOTAL POINTS</span></div><div><strong id="profile-farms">0</strong><span>FARM CYCLES</span></div><div><strong id="profile-friends">0</strong><span>REFERRALS</span></div></div>
   <div class="dashboard-heading"><h3>YOUR WORKSPACE</h3></div>
   <div class="settings-list">
+   <button class="setting-item admin-entry" id="admin-entry" type="button" hidden><span class="setting-symbol"><svg><use href="#i-shield"/></svg></span><span><strong>Admin Console</strong><small>Verified missions, users &amp; rewards</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
    <button class="setting-item" id="account-setting"><span class="setting-symbol"><svg><use href="#i-user"/></svg></span><span><strong>Account</strong><small>Account details &amp; connection status</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
    <button class="setting-item" id="notifications-setting"><span class="setting-symbol"><svg><use href="#i-bell"/></svg></span><span><strong>Notifications</strong><small>Rewards and announcements</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
    <button class="setting-item" id="security-setting"><span class="setting-symbol"><svg><use href="#i-shield"/></svg></span><span><strong>Security &amp; privacy</strong><small>Keep your wallet and data safe</small></span><svg class="chevron"><use href="#i-arrow"/></svg></button>
@@ -126,6 +127,39 @@
   </div>
   <div class="dashboard-heading"><h3>ACHIEVEMENTS</h3></div><div class="achievement-row"><div class="achievement-badge" id="badge-pioneer"><span><svg><use href="#i-spark"/></svg></span><strong>PIONEER</strong><small id="badge-pioneer-label">LOCKED</small></div><div class="achievement-badge" id="badge-claim"><span><svg><use href="#i-lightning"/></svg></span><strong>FIRST CLAIM</strong><small id="badge-claim-label">LOCKED</small></div><div class="achievement-badge" id="badge-connector"><span><svg><use href="#i-friends"/></svg></span><strong>CONNECTOR</strong><small id="badge-connector-label">LOCKED</small></div></div>
   <div class="app-version"><span class="brand-sign">Z</span><div><strong>ZENQORY</strong><small>Genesis network • v1.2</small></div><span class="status-light"><span class="live-point"></span> PRE-LAUNCH</span></div>
+ </div>
+ <div class="screen admin-screen" id="screen-admin" data-screen="admin">
+   <div class="admin-head"><button class="admin-back" id="admin-back" type="button"><svg aria-hidden="true"><use href="#i-arrow"/></svg> BACK TO PROFILE</button><span class="admin-status"><span class="live-point"></span> OWNER ACCESS</span></div>
+   <div class="admin-hero"><span class="overline">ZENQORY CONTROL CENTER</span><h1>Admin <em>Console.</em></h1><p>Monitor network activity. Publish verifiable missions. Control rewards with a complete audit trail.</p><div class="admin-head-meta"><span>TELEGRAM VERIFIED</span><button id="admin-refresh" type="button">REFRESH DATA</button></div></div>
+   <div class="admin-metrics" aria-label="Platform metrics">
+     <div class="admin-metric"><small>TOTAL USERS</small><strong id="admin-stat-users">—</strong></div>
+     <div class="admin-metric"><small>ACTIVE FARMERS</small><strong id="admin-stat-active">—</strong></div>
+     <div class="admin-metric"><small>REFERRALS</small><strong id="admin-stat-invites">—</strong></div>
+     <div class="admin-metric"><small>POINTS ISSUED*</small><strong id="admin-stat-points">—</strong></div>
+     <div class="admin-metric"><small>FARM CLAIMS</small><strong id="admin-stat-farms">—</strong></div>
+     <div class="admin-metric"><small>MISSION CLAIMS</small><strong id="admin-stat-claims">—</strong></div>
+   </div>
+   <p class="admin-footnote">*Points issued represents current off-chain point balances, not cash or tokens.</p>
+   <div class="dashboard-heading"><h3>CREATE VERIFIED MISSION</h3><span class="tag-outline">ADMIN ONLY</span></div>
+   <form class="admin-form" id="admin-mission-form">
+     <label class="admin-field"><span>Mission title</span><input id="admin-mission-name" maxlength="80" minlength="5" placeholder="e.g. Complete 3 farming cycles" required autocomplete="off"></label>
+     <label class="admin-field"><span>Clear requirement / description</span><textarea id="admin-mission-description" rows="3" maxlength="220" minlength="10" placeholder="Tell users exactly what they must do before claiming points." required></textarea></label>
+     <div class="admin-form-grid">
+       <label class="admin-field"><span>Verification type</span><select id="admin-mission-kind"><option value="farm_cycles">Completed farm cycles</option><option value="active_referrals">Active invited friends</option><option value="telegram_channel">Join a Telegram channel</option></select></label>
+       <label class="admin-field"><span>Required amount</span><input id="admin-mission-target" type="number" min="1" max="10000" value="1" required inputmode="numeric"></label>
+       <label class="admin-field"><span>Reward points</span><input id="admin-mission-points" type="number" min="1" max="500" value="30" required inputmode="numeric"></label>
+     </div>
+     <label class="admin-field" id="admin-channel-field" hidden><span>Public Telegram channel username</span><input id="admin-mission-channel" maxlength="120" placeholder="@YourChannel" autocomplete="off"><small>ZENQORY bot must be an administrator of this channel to verify membership.</small></label>
+     <p class="admin-rule"><svg aria-hidden="true"><use href="#i-shield"/></svg>Only server-verifiable actions are eligible for rewards. Sending a link or clicking a task never earns points by itself.</p>
+     <button class="action-main admin-publish" id="admin-create" type="submit"><svg aria-hidden="true"><use href="#i-spark"/></svg> PUBLISH VERIFIED MISSION</button>
+   </form>
+   <div class="dashboard-heading"><h3>MISSION MANAGEMENT</h3><span class="tag-outline" id="admin-mission-count">0 TASKS</span></div>
+   <div class="admin-mission-list" id="admin-missions"><p class="admin-placeholder">Your missions will appear here.</p></div>
+   <div class="dashboard-heading"><h3>RECENT MEMBERS</h3><span class="tag-outline">LATEST 10</span></div>
+   <div id="admin-users" class="admin-data-list"><p class="admin-placeholder">Members will appear here.</p></div>
+   <div class="dashboard-heading"><h3>ADMIN CHANGE LOG</h3></div>
+   <div id="admin-audit" class="admin-data-list"><p class="admin-placeholder">Administrative changes will appear here.</p></div>
+   <div class="admin-security-note"><svg aria-hidden="true"><use href="#i-shield"/></svg><div><strong>Protected by Telegram authentication</strong><p>Only the Telegram ID explicitly configured by the owner has access. All mission changes are logged. Claiming points still requires server-side verification.</p></div></div>
  </div>
  <nav class="bottom-nav" aria-label="ZENQORY main menu">
   <button class="nav-item active" data-tab="home" aria-label="Home" aria-current="page"><svg><use href="#i-home"/></svg><span>Home</span></button>
