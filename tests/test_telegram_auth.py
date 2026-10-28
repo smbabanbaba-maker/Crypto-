@@ -41,6 +41,27 @@ class TelegramInitDataTests(unittest.TestCase):
         self.assertEqual(person["id"], 92001)
         self.assertEqual(person["first_name"], "Test Explorer")
 
+    def test_signed_telegram_avatar_and_privacy_fallback(self):
+        user = {"id": 92001, "first_name": "Test Explorer",
+                "photo_url": "https://t.me/i/userpic/320/example.jpg"}
+        signed = signed_init_data({"user": json.dumps(user, separators=(",", ":"))})
+        person = server.telegram_identity(signed)
+        self.assertEqual(person["photo_url"], user["photo_url"])
+
+        # Authenticated but absent or restricted photos must become placeholders.
+        self.assertIsNone(server.telegram_identity(signed_init_data())["photo_url"])
+        for url in ("https://example.org/track.png", "http://t.me/i/userpic/a.jpg",
+                    "https://t.me.evil.org/picture.jpg", "javascript:alert(1)",
+                    "https://user:pass@t.me/image.jpg", "https://t.me:8443/i/a.jpg"):
+            self.assertIsNone(server.trusted_telegram_photo(url), url)
+
+        # Tampering with signed avatar data is rejected, not silently accepted.
+        data = dict(parse_qsl(signed))
+        user["photo_url"] = "https://example.org/track.png"
+        data["user"] = json.dumps(user, separators=(",", ":"))
+        with self.assertRaises(HTTPException):
+            server.telegram_identity(urlencode(data))
+
     def test_signature_field_kept_in_bot_hmac(self):
         # Modern Telegram can include Ed25519 signature in initData.
         # Bot-token HMAC includes this field; third-party validation excludes it.
