@@ -305,7 +305,7 @@ function renderCyber(){
     heroChip.lastChild.nodeValue=DEMO?" LOCAL DEMO POINTS":" PRE-LAUNCH REWARDS";
   }
   $("referral-code").textContent=DEMO?"Share ZENQORY preview":(referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite");
-  $("referral-note").textContent=DEMO?"Preview invite only — no referral rewards are recorded.":!accountReady?"Reconnect Telegram to activate personal invitations.":"A friend counts after signing up via your link. Get 10 bonus points when they finish their first 8-hour farming cycle.";
+  $("referral-note").textContent=DEMO?"Preview invite only — no referral rewards are recorded.":!accountReady?"Reconnect Telegram to activate personal invitations.":"Your link opens the official bot chat. Friends tap Start, then Launch ZENQORY. Their first completed 8-hour claim earns you 10 points and +2% future farming boost.";
   $("network-spectrum-count").textContent=fmt(state.refCount)+" INVITED FRIEND"+(state.refCount===1?"":"S");
   $("profile-code").textContent=DEMO?"PREVIEW":accountReady?String(state.id||"").slice(-6):"OFFLINE";
   var count=Math.max(0,Number(state.farmCount)||0),stage=count%5,percentage=100*stage/5;
@@ -323,12 +323,19 @@ function claimDaily(){if(state.lastDaily&&now()-state.lastDaily<DAILY_MS)return;
 function claimTask(id){var task=missionCatalog().find(function(t){return t.id===id;});if(!task||state.tasks.indexOf(id)!==-1)return;
 if(!missionUnlocked(id)){modal("Mission not completed","Complete the mission's stated requirement before claiming the bonus. Rewards are verified on the server.");return;}
 perform("/tasks/"+id,function(){state.tasks.push(id);state.balance+=task.reward;record(task.name,task.reward);},"Verified mission complete! +"+task.reward+" points");}
-function share(){if(!referralLink){modal("Open inside Telegram","Your personal invite link appears after opening ZENQORY through your official Telegram Mini App.");return;}if(DEMO)notice("Preview share: bonuses are not tracked yet.");var uri="https://t.me/share/url?url="+encodeURIComponent(referralLink)+"&text="+encodeURIComponent("Join ZENQORY — an early digital rewards community.");try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}catch(e){window.open(uri,"_blank","noopener,noreferrer");}}
-function shareBotInvite(){
+function share(){if(!referralLink){modal("Open inside Telegram","Your personal invite link appears after opening ZENQORY through your official Telegram Mini App.");return;}if(DEMO)notice("Preview share: bonuses are not tracked yet.");var uri="https://t.me/share/url?url="+encodeURIComponent(referralLink)+"&text="+encodeURIComponent("Join me on ZENQORY! Open this link, tap START in the official bot chat, then tap Launch ZENQORY. Earn off-chain reward points from farming and missions.");try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}catch(e){window.open(uri,"_blank","noopener,noreferrer");}}
+function openOfficialBotChat(){
+  // Unlike the old ?startapp= link, a regular bot chat is easy to revisit
+  // after leaving the Mini App. Never open an untrusted destination.
   if(!accountReady||!referralBotLink)return;
-  var uri="https://t.me/share/url?url="+encodeURIComponent(referralBotLink)+"&text="+encodeURIComponent("Join me on ZENQORY! Tap Start, then Launch ZENQORY to begin farming points.");
-  try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}
-  catch(e){window.open(uri,"_blank","noopener,noreferrer");}
+  var botChat=referralBotLink.split("?")[0];
+  if(!/^https:\/\/t\.me\/[A-Za-z0-9_]{5,32}$/.test(botChat)){
+    notice("The official bot link is unavailable.");return;
+  }
+  try{
+    if(tg&&tg.openTelegramLink)tg.openTelegramLink(botChat);
+    else window.open(botChat,"_blank","noopener,noreferrer");
+  }catch(error){notice("Open the bot from Telegram search and tap Start.");}
 }
 async function copyReferral(){if(!referralLink)return;try{await navigator.clipboard.writeText(referralLink);notice("Invite link copied");}catch(e){modal("Your invite link",referralLink);}}
 
@@ -515,7 +522,7 @@ withdraw:["Withdrawals Not Available","ZENQORY points currently have no cash val
 };var item=info[kind]||info.support;modal(item[0],kind==="account"?(connectionSummary()+(accountReady?" Your Telegram ID: "+String(state.id):"")):item[1]);}
 $("farm-button").addEventListener("click",startOrClaim);$("daily-card").addEventListener("click",claimDaily);$("mission-list").addEventListener("click",function(event){var btn=event.target.closest("[data-claim-task]");if(btn)claimTask(btn.getAttribute("data-claim-task"));});
 document.querySelectorAll("[data-tab]").forEach(function(button){button.addEventListener("click",function(){openTab(button.dataset.tab);});});document.querySelectorAll("[data-go]").forEach(function(node){node.addEventListener("click",function(){openTab(node.dataset.go);});node.addEventListener("keydown",function(e){if(e.key==="Enter")openTab(node.dataset.go);});});
-$("avatar-button").addEventListener("click",function(){openTab("profile");});$("settings-button").addEventListener("click",function(){openTab("profile");});$("notification-button").addEventListener("click",function(){showInfo("notification");});$("copy-referral").addEventListener("click",copyReferral);$("invite-button").addEventListener("click",share);$("invite-bot-button").addEventListener("click",shareBotInvite);
+$("avatar-button").addEventListener("click",function(){openTab("profile");});$("settings-button").addEventListener("click",function(){openTab("profile");});$("notification-button").addEventListener("click",function(){showInfo("notification");});$("copy-referral").addEventListener("click",copyReferral);$("invite-button").addEventListener("click",share);$("invite-bot-button").addEventListener("click",openOfficialBotChat);
 $("wallet-connect").addEventListener("click",function(){showInfo("wallet");});$("wallet-withdraw").addEventListener("click",function(){showInfo("withdraw");});
 ["account","notifications","security","language","support"].forEach(function(item){var btn=$(item+"-setting");if(btn)btn.addEventListener("click",function(){showInfo(item==="notifications"?"notification":item);});});
 $("modal-close").addEventListener("click",closeModal);$("modal-ok").addEventListener("click",closeModal);$("modal-backdrop").addEventListener("click",function(e){if(e.target===$("modal-backdrop"))closeModal();});document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
