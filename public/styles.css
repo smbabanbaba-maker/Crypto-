@@ -843,3 +843,8 @@ body.zen-ready .zen-launch-screen{transition:opacity .12s linear,visibility 0s l
 @media(prefers-reduced-motion:reduce){
   *,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Clean fallback when mobile connectivity is slow; never show half-rendered UI. */
+.zen-launch-retry[hidden]{display:none!important}
+.zen-launch-retry{margin-top:20px;padding:13px 24px;border:1px solid #73ee95;border-radius:12px;background:#153b23;color:#e7ffed;font:800 11px var(--display);letter-spacing:1px;box-shadow:0 0 18px #42db6830}
+.zen-launch-retry:active{transform:scale(.98)}
