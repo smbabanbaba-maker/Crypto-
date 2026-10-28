@@ -130,13 +130,20 @@ class RewardsAndReferrals(unittest.TestCase):
         inv = self.client.get("/api/me", headers=headers(INVITER))
         self.assertEqual(inv.status_code, 200, inv.text)
         self.assertEqual(inv.json()["refCount"], 0)
+        # Primary invite must open the official BOT CHAT, not bypass it
+        # with a Main Mini App startapp link. This keeps the bot accessible.
         self.assertEqual(
             inv.json()["referralLink"],
-            f"https://t.me/ZenqoryTestBot?startapp=ref_{INVITER}"
+            f"https://t.me/ZenqoryTestBot?start=ref_{INVITER}"
         )
         self.assertEqual(
             inv.json()["referralBotLink"],
             f"https://t.me/ZenqoryTestBot?start=ref_{INVITER}"
+        )
+        # Older invites remain accepted, so previously shared referrals work.
+        self.assertEqual(
+            inv.json()["referralMiniAppLink"],
+            f"https://t.me/ZenqoryTestBot?startapp=ref_{INVITER}"
         )
         joined = self.client.get(
             "/api/me", headers=headers(INVITEE, f"ref_{INVITER}")
@@ -182,6 +189,8 @@ class RewardsAndReferrals(unittest.TestCase):
         msg = webhook(INVITER)
         self.assertEqual(msg.status_code, 200, msg.text)
         self.assertIn("invitation has been registered", msg.json()["text"])
+        self.assertIn("Launch ZENQORY", msg.json()["text"])
+        self.assertEqual(msg.json()["reply_markup"]["inline_keyboard"][0][0]["web_app"]["url"], server.ZENQORY_APP_URL)
         self.assertEqual(webhook(SECOND_INVITER).status_code, 200)
         self.assertEqual(self.client.get("/api/me", headers=headers(INVITEE)).status_code, 200)
         # A later malicious or mistaken referral link cannot rewrite the first sponsor.
