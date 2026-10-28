@@ -251,6 +251,171 @@ function shareBotInvite(){
   catch(e){window.open(uri,"_blank","noopener,noreferrer");}
 }
 async function copyReferral(){if(!referralLink)return;try{await navigator.clipboard.writeText(referralLink);notice("Invite link copied");}catch(e){modal("Your invite link",referralLink);}}
+
+var adminData=null,adminLoading=false,adminMutation=false;
+function adminElement(tag,className,label){
+  var el=document.createElement(tag);
+  if(className)el.className=className;
+  if(label!==undefined)el.textContent=String(label);
+  return el;
+}
+function appendAdminLine(root,title,meta,status){
+  var line=adminElement("div","admin-data-item");
+  var main=adminElement("div","admin-data-main");
+  main.append(adminElement("strong","",title),adminElement("small","",meta));
+  line.append(main,adminElement("span","admin-data-status",status));
+  root.appendChild(line);
+}
+function renderAdminOverview(){
+  if(!adminData||!adminData.admin)return;
+  var stats=adminData.stats||{};
+  [
+    ["admin-stat-users",stats.users],["admin-stat-active",stats.activeFarmers],
+    ["admin-stat-invites",stats.invited],["admin-stat-points",stats.outstandingPoints],
+    ["admin-stat-farms",stats.farmClaims],["admin-stat-claims",stats.missionClaims]
+  ].forEach(function(pair){$(pair[0]).textContent=fmt(pair[1]);});
+  var list=$("admin-missions");list.replaceChildren();
+  var missions=Array.isArray(adminData.missions)?adminData.missions:[];
+  $("admin-mission-count").textContent=missions.length+" TASK"+(missions.length===1?"":"S");
+  missions.forEach(function(m){
+    var panel=adminElement("article","admin-mission-row"+(m.enabled?"":" admin-mission-paused"));
+    var top=adminElement("div","admin-mission-top");
+    var title=adminElement("div","admin-mission-title");
+    title.append(adminElement("strong","",m.name),adminElement("small","",m.desc));
+    var reward=adminElement("div","admin-mission-points","+"+fmt(m.reward)+" PTS");
+    top.append(title,reward);panel.appendChild(top);
+    var meta=adminElement("div","admin-mission-meta");
+    meta.append(
+      adminElement("span","",String(m.kind||"").replaceAll("_"," ").toUpperCase()+" · "+fmt(m.target)+" REQUIRED"),
+      adminElement("span","",fmt(m.claims)+" CLAIMS"),
+      adminElement("span",m.enabled?"admin-live":"admin-paused",m.enabled?"LIVE":"PAUSED")
+    );
+    panel.appendChild(meta);
+    var actions=adminElement("div","admin-mission-actions");
+    var toggle=adminElement("button","admin-small-button",m.enabled?"PAUSE MISSION":"RESUME MISSION");
+    toggle.type="button";toggle.dataset.adminToggle=m.id;
+    var edit=adminElement("button","admin-small-button admin-edit-button","EDIT REWARD & TEXT");
+    edit.type="button";edit.dataset.adminEdit=m.id;
+    actions.append(toggle,edit);panel.appendChild(actions);
+    var editForm=adminElement("form","admin-edit-form");
+    editForm.hidden=true;editForm.dataset.adminForm=m.id;
+    [
+      ["name","Title",m.name,"text"],
+      ["description","Description",m.desc,"text"],
+      ["points","Reward points",m.reward,"number"]
+    ].forEach(function(spec){
+      var field=adminElement("label","admin-field");
+      field.appendChild(adminElement("span","",spec[1]));
+      var inp=document.createElement("input");inp.name=spec[0];inp.type=spec[3];
+      inp.value=spec[2];inp.required=true;
+      if(spec[0]==="points"){inp.min="1";inp.max="500";inp.step="1";}
+      else{inp.minLength=spec[0]==="name"?5:10;inp.maxLength=spec[0]==="name"?80:220;}
+      field.appendChild(inp);editForm.appendChild(field);
+    });
+    var save=adminElement("button","admin-save-button","SAVE CHANGES");
+    save.type="submit";editForm.appendChild(save);
+    panel.appendChild(editForm);list.appendChild(panel);
+  });
+  if(!missions.length)list.appendChild(adminElement("p","admin-placeholder","No missions found."));
+  var users=$("admin-users");users.replaceChildren();
+  (adminData.recentUsers||[]).forEach(function(u){
+    appendAdminLine(users,u.name||"Explorer",
+      "Telegram ID ···"+String(u.id||"").slice(-6)+" · "+fmt(u.farmCount)+" farm claims",
+      fmt(u.balance)+" PTS");
+  });
+  if(!users.children.length)users.appendChild(adminElement("p","admin-placeholder","No members yet."));
+  var audits=$("admin-audit");audits.replaceChildren();
+  (adminData.audit||[]).forEach(function(entry){
+    var date=new Date(Number(entry.at)||0).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+    appendAdminLine(audits,(entry.action||"CHANGE").toUpperCase()+" · "+(entry.missionId||""),
+      entry.details||"Mission change",date);
+  });
+  if(!audits.children.length)audits.appendChild(adminElement("p","admin-placeholder","No administrative changes yet."));
+}
+async function loadAdminOverview(){
+  if(!accountReady||!state.isAdmin||adminLoading)return;
+  adminLoading=true;
+  $("admin-refresh").disabled=true;
+  try{
+    adminData=await callApi("/admin/overview");
+    renderAdminOverview();
+  }catch(err){
+    notice(err.message||"Unable to load administrator data");
+    if(err.status===403){state.isAdmin=false;$("admin-entry").hidden=true;openTab("profile");}
+  }finally{adminLoading=false;$("admin-refresh").disabled=false;}
+}
+async function adminUpdateMission(id,changes){
+  if(!accountReady||!state.isAdmin||adminMutation)return;
+  adminMutation=true;
+  try{
+    await callApi("/admin/missions/"+encodeURIComponent(id),"PATCH",changes);
+    notice("Mission updated. All changes are recorded.");
+    await loadAdminOverview();
+    normalize(await callApi("/me"));render();
+  }catch(err){notice(err.message||"Mission update failed");}
+  finally{adminMutation=false;}
+}
+function updateAdminFormMode(){
+  var channel=$("admin-mission-kind").value==="telegram_channel";
+  $("admin-channel-field").hidden=!channel;
+  $("admin-mission-channel").required=channel;
+  $("admin-mission-target").readOnly=channel;
+  if(channel)$("admin-mission-target").value="1";
+}
+$("admin-entry").addEventListener("click",function(){openTab("admin");});
+$("admin-back").addEventListener("click",function(){openTab("profile");});
+$("admin-refresh").addEventListener("click",loadAdminOverview);
+$("admin-mission-kind").addEventListener("change",updateAdminFormMode);
+$("admin-mission-form").addEventListener("submit",async function(event){
+  event.preventDefault();
+  if(!accountReady||!state.isAdmin||adminMutation)return;
+  var kind=$("admin-mission-kind").value;
+  var payload={
+    name:$("admin-mission-name").value.trim(),
+    description:$("admin-mission-description").value.trim(),
+    kind:kind,
+    target:kind==="telegram_channel"?1:Number($("admin-mission-target").value),
+    points:Number($("admin-mission-points").value),
+    channel:kind==="telegram_channel"?$("admin-mission-channel").value.trim():""
+  };
+  if(!Number.isInteger(payload.target)||!Number.isInteger(payload.points)){
+    notice("Targets and points must be whole numbers");return;
+  }
+  adminMutation=true;$("admin-create").disabled=true;
+  try{
+    await callApi("/admin/missions","POST",payload);
+    notice("Verified mission published successfully.");
+    $("admin-mission-form").reset();updateAdminFormMode();
+    await loadAdminOverview();
+    normalize(await callApi("/me"));render();
+  }catch(err){notice(err.message||"Mission creation failed");}
+  finally{adminMutation=false;$("admin-create").disabled=false;}
+});
+$("admin-missions").addEventListener("click",function(event){
+  var edit=event.target.closest("[data-admin-edit]");
+  if(edit){
+    var form=edit.closest(".admin-mission-row").querySelector(".admin-edit-form");
+    form.hidden=!form.hidden;edit.textContent=form.hidden?"EDIT REWARD & TEXT":"CLOSE EDITOR";return;
+  }
+  var toggle=event.target.closest("[data-admin-toggle]");
+  if(toggle&&adminData&&!adminMutation){
+    var mission=(adminData.missions||[]).find(function(m){return m.id===toggle.dataset.adminToggle;});
+    if(mission)adminUpdateMission(mission.id,{enabled:!mission.enabled});
+  }
+});
+$("admin-missions").addEventListener("submit",function(event){
+  var form=event.target.closest("[data-admin-form]");
+  if(!form)return;event.preventDefault();
+  if(adminMutation)return;
+  var data=new FormData(form),id=form.dataset.adminForm;
+  adminUpdateMission(id,{
+    name:String(data.get("name")||"").trim(),
+    description:String(data.get("description")||"").trim(),
+    points:Number(data.get("points"))
+  });
+});
+updateAdminFormMode();
+
 function showInfo(kind){var info={
 notification:["Notifications","Farming reminders and major ecosystem updates will appear here as we develop the official Telegram bot."],
 settings:["ZENQORY Settings","Account settings, language, safety and help options are available from the Profile tab."],
