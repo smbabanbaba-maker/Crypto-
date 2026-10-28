@@ -45,7 +45,7 @@
 <div class="ambient-grid" aria-hidden="true"></div>
 <div class="app-shell cyber-v3"><div class="zen-ambient-core" aria-hidden="true"><i></i><i></i><i></i></div>
  <header class="topbar">
-  <button class="avatar-wrap" id="avatar-button" aria-label="Open profile"><span class="avatar-face">Z</span><span class="avatar-level"><strong>Lv. <span id="top-level">1</span></strong><small>Explorer</small></span></button>
+  <button class="avatar-wrap" id="avatar-button" aria-label="Open profile"><span class="avatar-face" id="top-avatar">Z</span><span class="avatar-level"><strong>Lv. <span id="top-level">1</span></strong><small>Explorer</small></span></button>
   <div class="wordmark"><span class="brand-sign">Z</span><span class="brand-text"><strong>ZENQORY</strong><small>THE FUTURE IS EARNED</small></span></div>
   <div class="header-actions"><button class="icon-circle" id="notification-button" aria-label="Notifications"><svg><use href="#i-bell"/></svg><span class="signal-dot"></span></button><button class="icon-circle" id="settings-button" aria-label="Settings"><svg><use href="#i-settings"/></svg></button></div>
  </header>
@@ -99,7 +99,7 @@
     <p id="friends-boost-hint">Invite friends. Each friend who completes a real farming cycle unlocks +2% mining power, up to +20%.</p>
   </section>
   <div class="network-spectrum"><div><span>PERSONAL REFERRAL MAP</span><strong id="network-spectrum-count">0 INVITED FRIENDS</strong></div><div class="network-spectrum-lines" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div></div><div class="dashboard-heading"><h3>NETWORK ACTIVITY</h3></div>
-  <div class="network-panel"><div class="zen-network-hologram" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="network-center"><span class="network-avatar">Z</span><b>YOU</b></div><div class="network-connectors"><span></span><span></span><span></span></div><div class="network-nodes"><span><svg><use href="#i-friends"/></svg></span><span><svg><use href="#i-friends"/></svg></span><span><svg><use href="#i-friends"/></svg></span></div><p>Your network will grow when friends join through your link.</p></div>
+  <div class="network-panel"><div class="zen-network-hologram" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="network-center"><span class="network-avatar" id="network-self-avatar">Z</span><b>YOU</b></div><div class="network-connectors"><span></span><span></span><span></span></div><div class="network-nodes" id="network-nodes" aria-live="polite"><span><svg><use href="#i-friends"/></svg></span><span><svg><use href="#i-friends"/></svg></span><span><svg><use href="#i-friends"/></svg></span></div><p id="network-description">Your network will grow when friends join through your link.</p></div>
   <div class="referral-explainer"><svg><use href="#i-shield"/></svg><div><strong>Fair referral rewards</strong><p>You earn 10 points after an invited friend completes their first genuine farming cycle. No bot farms or fake referrals.</p></div></div>
  </div>
  <div class="screen" id="screen-wallet" data-screen="wallet">
