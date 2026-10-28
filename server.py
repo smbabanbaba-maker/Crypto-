@@ -11,6 +11,7 @@ import json
 import os
 import time
 from contextlib import contextmanager
+from starlette.concurrency import run_in_threadpool
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qsl
@@ -25,6 +26,8 @@ DAILY_MS = 24 * 60 * 60 * 1000
 FARM_REWARD = 80
 DAILY_REWARD = 20
 REFERRAL_REWARD = 10
+REFERRAL_PENDING_MS = 7 * 24 * 60 * 60 * 1000
+MAX_TELEGRAM_ID = 9223372036854775807
 TASK_REWARDS = {"welcome": 30, "safety": 20, "profile": 15}
 
 app = FastAPI(title="ZENQORY Rewards", docs_url=None, redoc_url=None, openapi_url=None)
@@ -63,7 +66,7 @@ def telegram_identity(raw: str) -> dict:
             raise ValueError("Invalid Telegram authentication")
         telegram_user = json.loads(data["user"])
         user_id = int(telegram_user["id"])
-        if user_id <= 0 or telegram_user.get("is_bot"):
+        if user_id <= 0 or user_id > MAX_TELEGRAM_ID or telegram_user.get("is_bot"):
             raise ValueError("A real Telegram user is required")
         return {
             "id": user_id,
@@ -120,6 +123,14 @@ def schema(conn):
             points INTEGER NOT NULL,
             created_at BIGINT NOT NULL
         )""")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS zen_referral_intents (
+            invitee_id BIGINT PRIMARY KEY,
+            sponsor_id BIGINT NOT NULL REFERENCES zen_users(id),
+            created_at BIGINT NOT NULL,
+            expires_at BIGINT NOT NULL
+        )""")
+        cursor.execute("CREATE INDEX IF NOT EXISTS zen_referral_intents_expiry_idx ON zen_referral_intents(expires_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS zen_users_referrals_idx ON zen_users(referred_by)")
         cursor.execute("CREATE INDEX IF NOT EXISTS zen_activity_recent_idx ON zen_activity(user_id,id DESC)")
     _schema_ready = True
@@ -136,26 +147,67 @@ def session():
         conn.close()
 
 
+def referral_sponsor(raw: str, invitee_id: int) -> int | None:
+    """Only accept a bounded, valid Telegram deep-link referral identifier."""
+    match = re.fullmatch(r"ref_([1-9][0-9]{0,18})", raw or "")
+    if not match:
+        return None
+    sponsor_id = int(match.group(1))
+    if sponsor_id > MAX_TELEGRAM_ID or sponsor_id == invitee_id:
+        return None
+    return sponsor_id
+
+
+def remember_bot_invite(invitee_id: int, start_parameter: str) -> bool:
+    """Store a 7-day invite intent from an authenticated Telegram webhook.
+
+    The first invite wins, only existing sponsors qualify, and existing
+    accounts cannot be retroactively reassigned to new inviters.
+    """
+    sponsor_id = referral_sponsor(start_parameter, invitee_id)
+    if sponsor_id is None:
+        return False
+    current = utc_ms()
+    with session() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+              INSERT INTO zen_referral_intents(invitee_id,sponsor_id,created_at,expires_at)
+              SELECT %s, id, %s, %s FROM zen_users
+              WHERE id=%s AND NOT EXISTS (SELECT 1 FROM zen_users WHERE id=%s)
+              ON CONFLICT (invitee_id) DO NOTHING
+            """, (invitee_id, current, current + REFERRAL_PENDING_MS,
+                  sponsor_id, invitee_id))
+            return cursor.rowcount == 1
+
+
 def ensure_user(conn, person: dict) -> int:
     uid = person["id"]
     with conn.cursor() as cursor:
         cursor.execute("SELECT id FROM zen_users WHERE id=%s", (uid,))
         if cursor.fetchone() is None:
-            sponsor = None
-            param = person["start_param"]
-            if param.startswith("ref_") and param[4:].isdigit():
-                possible = int(param[4:])
-                if possible > 0 and possible != uid:
-                    cursor.execute("SELECT id FROM zen_users WHERE id=%s", (possible,))
-                    if cursor.fetchone():
-                        sponsor = possible
+            # The signed Main Mini App start_param takes priority.
+            sponsor = referral_sponsor(person.get("start_param") or "", uid)
+            if sponsor is not None:
+                cursor.execute("SELECT id FROM zen_users WHERE id=%s", (sponsor,))
+                if not cursor.fetchone():
+                    sponsor = None
+            if sponsor is None:
+                # Fallback for users whose invite was a Bot /start ref_* link.
+                cursor.execute("""
+                  SELECT sponsor_id FROM zen_referral_intents
+                  WHERE invitee_id=%s AND expires_at >= %s
+                """, (uid, utc_ms()))
+                pending = cursor.fetchone()
+                if pending:
+                    sponsor = pending["sponsor_id"]
             cursor.execute("""
               INSERT INTO zen_users(id,first_name,referred_by,created_at)
               VALUES(%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING
             """, (uid, person["first_name"], sponsor, utc_ms()))
+        # Mark the invite consumed without letting future links change this user.
+        cursor.execute("DELETE FROM zen_referral_intents WHERE invitee_id=%s", (uid,))
         cursor.execute("UPDATE zen_users SET first_name=%s WHERE id=%s", (person["first_name"], uid))
     return uid
-
 
 def activity(conn, user_id: int, title: str, amount: int):
     with conn.cursor() as cursor:
@@ -171,8 +223,14 @@ def get_snapshot(conn, user_id: int) -> dict:
         u = cursor.fetchone()
         cursor.execute("SELECT task_id FROM zen_tasks WHERE user_id=%s", (user_id,))
         tasks = [x["task_id"] for x in cursor.fetchall()]
-        cursor.execute("SELECT COUNT(*) AS n FROM zen_users WHERE referred_by=%s", (user_id,))
-        referrals = cursor.fetchone()["n"]
+        cursor.execute("""
+          SELECT COUNT(*) AS n,
+                 COUNT(*) FILTER (WHERE farm_count > 0) AS active_n
+          FROM zen_users WHERE referred_by=%s
+        """, (user_id,))
+        referral_stats = cursor.fetchone()
+        referrals = referral_stats["n"]
+        active_referrals = referral_stats["active_n"]
         cursor.execute("""
           SELECT activity_type,points,created_at FROM zen_activity
           WHERE user_id=%s ORDER BY id DESC LIMIT 15
@@ -189,9 +247,11 @@ def get_snapshot(conn, user_id: int) -> dict:
         "lastDaily": u["last_daily"],
         "tasks": tasks,
         "refCount": referrals,
+        "activeRefCount": active_referrals,
         "refPoints": u["referral_points"],
         "history": history,
         "referralLink": f"https://t.me/{username}?startapp=ref_{user_id}" if username else "",
+        "referralBotLink": f"https://t.me/{username}?start=ref_{user_id}" if username else "",
     }
 
 
@@ -481,7 +541,19 @@ async def telegram_webhook(request: Request,
     raw_text = message.get("text", "")
     if not isinstance(raw_text, str):
         return {"ok": True}
-    command = raw_text.strip().split(maxsplit=1)[0].split("@")[0].lower()
+    words = raw_text.strip().split(maxsplit=1)
+    command = (words[0].split("@")[0].lower() if words else "")
+    invite_status = ""
+    if command == "/start" and len(words) == 2:
+        # This is a server-authenticated message from Telegram (webhook secret).
+        # Store referral attribution before the user opens the Mini App.
+        try:
+            accepted = await run_in_threadpool(remember_bot_invite, chat_id, words[1].strip())
+            if accepted:
+                invite_status = "\n\n🎁 Your friend's invitation has been registered."
+        except Exception:
+            # Bot welcome must remain usable even if the rewards DB is down.
+            invite_status = ""
     if command in ("/start", "/app", "start", "open zenqory"):
         first_name = str((message.get("from") or {}).get("first_name") or "Explorer")[:40]
         greeting = (
@@ -491,7 +563,7 @@ async def telegram_webhook(request: Request,
             "🎯 Complete missions and discover new rewards.\n"
             "👥 Bring friends into the ZENQORY community.\n\n"
             "Ready to explore? Tap Launch ZENQORY below. 🚀\n\n"
-            "ZNQY points are pre-launch rewards, not tradeable tokens."
+            "ZNQY points are pre-launch rewards, not tradeable tokens." + invite_status
         )
     elif command in ("/channel", "/join"):
         greeting = (
@@ -564,16 +636,11 @@ def telegram_status():
         bot = _bot_api("getMe", {}, token).get("result") or {}
         response["bot_api_reachable"] = True
         response["bot_username"] = bot.get("username")
-        # Synchronize our brief, original welcome copy without touching media.
-        # BotFather exclusively controls the GIF/video description picture.
-        current_description = _bot_api("getMyDescription", {}, token).get("result") or {}
-        if current_description.get("description", "") != ZENQORY_BOT_DESCRIPTION:
-            _bot_api("setMyDescription", {"description": ZENQORY_BOT_DESCRIPTION}, token)
+        # Read-only status endpoint: never reconfigure the bot on a GET request.
+        # Only a signed POST to /api/telegram/activate may register the webhook.
         webhook_info = _bot_api("getWebhookInfo", {}, token).get("result") or {}
         expected = ZENQORY_APP_URL + "/api/telegram/webhook"
-        if webhook_info.get("url") != expected:
-            _setup_telegram_bot()
-            webhook_info = _bot_api("getWebhookInfo", {}, token).get("result") or {}
+        # A missing webhook is reported to the owner, not silently mutated.
         response["webhook_connected"] = webhook_info.get("url") == expected
         response["webhook_pending_updates"] = int(webhook_info.get("pending_update_count") or 0)
         response["setup"] = "ready" if response["webhook_connected"] else "webhook_not_ready"
@@ -585,6 +652,17 @@ def telegram_status():
         response["http_error"] = exc.status_code
     return response
 
+
+
+@app.middleware("http")
+async def security_response_headers(request: Request, call_next):
+    """Basic defense-in-depth headers for JSON and HTML responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "no-cache"
+    return response
 
 
 # Local uvicorn convenience. On Vercel, the public/ folder is served by its CDN.
