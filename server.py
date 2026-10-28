@@ -565,16 +565,55 @@ def daily(x_telegram_init_data: str = Header(default="")):
         return get_snapshot(conn, uid)
 
 
+def verify_channel_member(channel: str, user_id: int) -> bool:
+    """Never award channel tasks for a click; ask Telegram for actual membership."""
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if not token:
+        raise HTTPException(503, "Telegram channel verification is not configured")
+    try:
+        result = _bot_api("getChatMember",
+                          {"chat_id": channel, "user_id": user_id}, token).get("result") or {}
+    except HTTPException:
+        raise HTTPException(503, "Channel membership cannot be verified right now") from None
+    status = result.get("status")
+    return status in ("member", "administrator", "creator") or (
+        status == "restricted" and result.get("is_member") is True
+    )
+
+
+def check_channel_bot_permissions(channel: str) -> None:
+    """Channel tasks may only be published when the bot can verify membership."""
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if not token:
+        raise HTTPException(503, "Configure the Telegram bot before channel missions")
+    try:
+        bot = _bot_api("getMe", {}, token).get("result") or {}
+        bot_id = int(bot["id"])
+        role = _bot_api("getChatMember", {"chat_id": channel, "user_id": bot_id}, token)
+        status = (role.get("result") or {}).get("status")
+    except (HTTPException, KeyError, ValueError, TypeError):
+        raise HTTPException(422,
+                            "Add the ZENQORY bot as a channel administrator, then retry") from None
+    if status not in ("administrator", "creator"):
+        raise HTTPException(422, "The ZENQORY bot must be a channel administrator")
+
+
 @app.post("/api/tasks/{task_id}")
 def task_claim(task_id: str, x_telegram_init_data: str = Header(default="")):
-    if task_id not in TASK_REWARDS:
-        raise HTTPException(404, "Unknown mission")
     person = telegram_identity(x_telegram_init_data)
+    if len(task_id) > 64:
+        raise HTTPException(404, "Unknown mission")
     with session() as conn:
         uid = ensure_user(conn, person)
         with conn.cursor() as cursor:
-            # Claim eligibility is checked again in this database transaction;
-            # a user cannot earn anything by forging a JavaScript task action.
+            cursor.execute("""
+              SELECT id,name,kind,target,points,channel
+              FROM zen_missions WHERE id=%s AND enabled=TRUE FOR SHARE
+            """, (task_id,))
+            mission = cursor.fetchone()
+            if not mission:
+                raise HTTPException(404, "Mission not available")
+            # Ensure a single payout even under concurrent claims.
             cursor.execute("""
               SELECT farm_start,farm_count FROM zen_users WHERE id=%s FOR UPDATE
             """, (uid,))
@@ -583,20 +622,167 @@ def task_claim(task_id: str, x_telegram_init_data: str = Header(default="")):
               SELECT COUNT(*) AS n FROM zen_users
               WHERE referred_by=%s AND farm_count>0
             """, (uid,))
-            active_referrals = cursor.fetchone()["n"]
-            eligible = task_eligibility(farm["farm_start"], int(farm["farm_count"]), int(active_referrals))
-            if not eligible[task_id]:
-                raise HTTPException(409, "Complete the mission requirement before claiming points")
+            active_referrals = int(cursor.fetchone()["n"])
+            if mission["kind"] == "telegram_channel":
+                if not verify_channel_member(mission["channel"], uid):
+                    raise HTTPException(409,
+                                        "Join the Telegram channel first, then tap Verify & Claim")
+            else:
+                progress = mission_progress(mission["kind"], farm["farm_start"],
+                                            int(farm["farm_count"]), active_referrals)
+                if progress < mission["target"]:
+                    raise HTTPException(409, "Complete the mission requirement before claiming points")
             cursor.execute("""
               INSERT INTO zen_tasks(user_id,task_id) VALUES(%s,%s)
               ON CONFLICT DO NOTHING RETURNING task_id
             """, (uid, task_id))
             if not cursor.fetchone():
                 raise HTTPException(409, "Mission already completed")
-            amount = TASK_REWARDS[task_id]
+            amount = int(mission["points"])
             cursor.execute("UPDATE zen_users SET balance=balance+%s WHERE id=%s", (amount, uid))
             activity(conn, uid, "Mission: " + task_id, amount)
         return get_snapshot(conn, uid)
+
+
+def admin_audit(conn, actor_id: int, action: str, mission_id: str, details: str):
+    with conn.cursor() as cursor:
+        cursor.execute("""
+          INSERT INTO zen_admin_audit(actor_id,action,mission_id,details,created_at)
+          VALUES(%s,%s,%s,%s,%s)
+        """, (actor_id, action, mission_id, details[:300], utc_ms()))
+
+
+@app.get("/api/admin/overview", include_in_schema=False)
+def admin_overview(x_telegram_init_data: str = Header(default="")):
+    person = require_admin(x_telegram_init_data)
+    with session() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+              SELECT COUNT(*) AS users,
+                     COALESCE(SUM(balance),0) AS outstanding_points,
+                     COALESCE(SUM(farm_count),0) AS farm_claims,
+                     COUNT(*) FILTER(WHERE referred_by IS NOT NULL) AS invited,
+                     COUNT(*) FILTER(WHERE farm_count>0) AS active_farmers
+              FROM zen_users
+            """)
+            totals = cursor.fetchone()
+            cursor.execute("SELECT COUNT(*) AS n FROM zen_tasks")
+            claims = int(cursor.fetchone()["n"])
+            cursor.execute("""
+              SELECT m.id,m.name,m.description,m.kind,m.target,m.points,
+                     m.channel,m.url,m.enabled,
+                     COUNT(t.user_id) AS claims
+              FROM zen_missions m
+              LEFT JOIN zen_tasks t ON t.task_id=m.id
+              GROUP BY m.id
+              ORDER BY m.created_at,m.id LIMIT 150
+            """)
+            missions = [{
+                "id": x["id"], "name": x["name"], "desc": x["description"],
+                "kind": x["kind"], "target": x["target"], "reward": x["points"],
+                "channel": x["channel"], "link": x["url"], "enabled": x["enabled"],
+                "claims": int(x["claims"]),
+            } for x in cursor.fetchall()]
+            cursor.execute("""
+              SELECT id,first_name,balance,farm_count,created_at FROM zen_users
+              ORDER BY created_at DESC,id DESC LIMIT 10
+            """)
+            recent_users = [{
+                "id": str(x["id"]), "name": x["first_name"],
+                "balance": x["balance"], "farmCount": x["farm_count"],
+                "joinedAt": x["created_at"],
+            } for x in cursor.fetchall()]
+            cursor.execute("""
+              SELECT action,mission_id,details,created_at
+              FROM zen_admin_audit ORDER BY id DESC LIMIT 15
+            """)
+            audit = [{
+                "action": x["action"], "missionId": x["mission_id"],
+                "details": x["details"], "at": x["created_at"],
+            } for x in cursor.fetchall()]
+    return {
+        "admin": True,
+        "stats": {
+            "users": int(totals["users"]),
+            "activeFarmers": int(totals["active_farmers"]),
+            "invited": int(totals["invited"]),
+            "outstandingPoints": int(totals["outstanding_points"]),
+            "farmClaims": int(totals["farm_claims"]),
+            "missionClaims": claims,
+        },
+        "missions": missions,
+        "recentUsers": recent_users,
+        "audit": audit,
+    }
+
+
+@app.post("/api/admin/missions", include_in_schema=False)
+def admin_create_mission(body: MissionCreate,
+                         x_telegram_init_data: str = Header(default="")):
+    person = require_admin(x_telegram_init_data)
+    name = body.name.strip()
+    description = body.description.strip()
+    if len(name) < 5 or len(description) < 10:
+        raise HTTPException(422, "Provide a clear mission name and description")
+    if body.kind == "telegram_channel":
+        if body.target != 1:
+            raise HTTPException(422, "Channel membership requires a target of 1")
+        channel, link = valid_public_channel(body.channel)
+        check_channel_bot_permissions(channel)
+    else:
+        if body.channel.strip():
+            raise HTTPException(422, "Channel address is only for Telegram channel missions")
+        channel, link = "", ""
+    mission_id = "mission_" + secrets.token_hex(8)
+    with session() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+              INSERT INTO zen_missions
+                (id,name,description,kind,target,points,channel,url,enabled,created_at,updated_at)
+              VALUES(%s,%s,%s,%s,%s,%s,%s,%s,TRUE,%s,%s)
+            """, (mission_id, name, description, body.kind, body.target,
+                  body.points, channel, link, utc_ms(), utc_ms()))
+        admin_audit(conn, person["id"], "create", mission_id,
+                    "Created " + body.kind + " mission with " + str(body.points) + " points")
+    return {"ok": True, "id": mission_id}
+
+
+@app.patch("/api/admin/missions/{mission_id}", include_in_schema=False)
+def admin_update_mission(mission_id: str, body: MissionUpdate,
+                         x_telegram_init_data: str = Header(default="")):
+    person = require_admin(x_telegram_init_data)
+    if len(mission_id) > 64:
+        raise HTTPException(404, "Mission not found")
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(422, "No changes provided")
+    if any(v is None for v in changes.values()):
+        raise HTTPException(422, "Mission settings cannot be null")
+    for key in ("name", "description"):
+        if key in changes:
+            changes[key] = changes[key].strip()
+            if len(changes[key]) < (5 if key == "name" else 10):
+                raise HTTPException(422, "Provide meaningful mission text")
+    allowed = {"name", "description", "points", "enabled"}
+    if not set(changes).issubset(allowed):
+        raise HTTPException(422, "Unsupported mission field")
+    with session() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM zen_missions WHERE id=%s FOR UPDATE", (mission_id,))
+            if not cursor.fetchone():
+                raise HTTPException(404, "Mission not found")
+            # Stable mission identity, threshold, verifier, and prior claims:
+            # admin can pause and adjust points, never manufacture a payout.
+            from psycopg import sql
+            query = sql.SQL("UPDATE zen_missions SET {},updated_at=%s WHERE id=%s").format(
+                sql.SQL(",").join(
+                    sql.SQL("{}=%s").format(sql.Identifier(key)) for key in changes
+                )
+            )
+            cursor.execute(query, [*changes.values(), utc_ms(), mission_id])
+        admin_audit(conn, person["id"], "update", mission_id,
+                    "Changed: " + ", ".join(sorted(changes.keys())))
+    return {"ok": True, "id": mission_id}
 
 
 @app.get("/")
@@ -719,8 +905,7 @@ def telegram_verify(x_telegram_init_data: str = Header(default="")):
 def activate_telegram(x_telegram_init_data: str = Header(default="")):
     """Administrative bot configuration, protected against user-triggered changes."""
     person = telegram_identity(x_telegram_init_data)
-    admin_id = os.environ.get("ZENQORY_ADMIN_TELEGRAM_ID", "").strip()
-    if not admin_id or str(person["id"]) != admin_id:
+    if not is_admin_id(person["id"]):
         raise HTTPException(403, "Bot administration is restricted")
     return _setup_telegram_bot()
 
@@ -785,6 +970,11 @@ async def telegram_webhook(request: Request,
                if channel_link() else
                "The official ZENQORY channel link has not been connected yet. "
                "Please check back soon.")
+        )
+    elif command in ("/myid", "/id"):
+        greeting = (
+            "🔐 YOUR TELEGRAM ID\n\n" + str(chat_id)
+            + "\n\nOnly share this ID with the ZENQORY administrator you trust."
         )
     elif command == "/help":
         greeting = (
