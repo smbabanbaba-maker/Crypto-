@@ -8,7 +8,7 @@ var hasTelegramSession=!!(tg&&tg.initData),isTelegramClient=!!(tg&&tg.platform&&
 var tasks=[{id:"welcome",name:"Start your first farming cycle",desc:"Start a real 8-hour cycle to unlock this reward",reward:30,icon:"i-lightning"},{id:"safety",name:"Claim your first farming reward",desc:"Complete an 8-hour cycle and claim your points",reward:20,icon:"i-shield"},{id:"profile",name:"Activate your first invited friend",desc:"Invite a friend who completes their first farm claim",reward:15,icon:"i-friends"}];
 var $=function(id){return document.getElementById(id);};
 var empty=function(){return{balance:0,farmStart:null,farmCount:0,farmReward:80,nextFarmReward:80,miningBoostPercent:0,maxMiningBoostPercent:20,taskEligibility:{welcome:false,safety:false,profile:false},lastDaily:null,tasks:[],refCount:0,activeRefCount:0,refPoints:0,firstName:"Explorer",id:"Preview",history:[]};};
-var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var telegramVerified=false,accountReady=false,connectionIssue="";var APP_URL="https://crypto-jade-nine.vercel.app";
+var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var telegramVerified=false,accountReady=false,connectionIssue="",lastRefreshAt=0,refreshing=false;var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
 var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'"></use></svg>';};
 var now=function(){return Date.now();};
@@ -34,7 +34,22 @@ function clock(ms){var sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600)
 function record(type,amount){state.history.unshift({type:type,amount:amount,at:Date.now()});state.history=state.history.slice(0,15);}
 async function callApi(path,method){var response=await fetch("/api"+path,{method:method||"GET",headers:{"X-Telegram-Init-Data":tg&&tg.initData?tg.initData:"","Content-Type":"application/json"}});var body;try{body=await response.json();}catch(e){throw new Error("Service returned an unexpected response");}if(!response.ok){var error=new Error(body.detail||"Request failed");error.status=response.status;throw error;}return body;}
 async function perform(path,demoAction,success){if(busy)return;if(!DEMO&&!accountReady){openTab("profile");notice("Reconnect Telegram before claiming rewards.");return;}busy=true;try{if(DEMO){demoAction();persist();}else{normalize(await callApi(path,"POST"));}render();notice(success);}catch(e){notice(e.message||"Something went wrong");}finally{busy=false;renderFarming();}}
-function openTab(name){if(["home","earn","friends","wallet","profile"].indexOf(name)<0)return;tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});var page=document.querySelector(".screen.active");if(page){page.scrollTop=0;}try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}}
+async function refreshLiveState(){
+  if(DEMO||!accountReady||busy||refreshing||now()-lastRefreshAt<30000)return;
+  lastRefreshAt=now();refreshing=true;
+  try{
+    var snapshot=await callApi("/me","GET");
+    if(accountReady&&!DEMO){normalize(snapshot);render();}
+  }catch(error){
+    // A fresh authorization failure must not silently leave a stale live balance.
+    if(error&&error.status===401){
+      accountReady=false;state=empty();
+      sessionGuide("Secure login","Your Telegram session has expired. Reopen the official Mini App, then reconnect.");
+      render();
+    }
+  }finally{refreshing=false;}
+}
+function openTab(name){if(["home","earn","friends","wallet","profile"].indexOf(name)<0)return;tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});var page=document.querySelector(".screen.active");if(page){page.scrollTop=0;}try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}if(name==="friends"||name==="home"||name==="earn")refreshLiveState();}
 function renderFarming(){var begin=state.farmStart,elapsed=begin===null?0:Math.max(0,now()-begin),progress=begin===null?0:Math.min(100,100*elapsed/FARM_MS),ready=begin!==null&&elapsed>=FARM_MS;
 $("farm-timer").textContent=begin===null?"08:00:00":ready?"00:00:00":clock(FARM_MS-elapsed);
 $("farm-caption").textContent=begin===null?"AWAITING ACTIVATION":ready?"REWARD READY":"FARMING PROTOCOL ACTIVE";
@@ -124,7 +139,7 @@ settings:["ZENQORY Settings","Account settings, language, safety and help option
 account:["Account Connection","Check your Telegram login and account status here."],
 security:["Security First","Telegram session data is verified on the server. We never need your wallet seed phrase or private keys. Never share them with anyone."],
 language:["Language Settings","English is the active language for all ZENQORY screens and bot messages."],
-support:["How ZENQORY Works","Start an 8-hour farming cycle. When complete, press Claim to collect points. You can also collect a daily bonus, complete small quests and invite real friends."],
+support:["How ZENQORY Works","Start an 8-hour farming cycle, then claim your reward. Each active referred friend unlocks +2% mining boost for future cycles (maximum +20%). A friend is active after a real first farm claim. Missions pay once only after their requirements are verified on our server."],
 wallet:["TON Wallet — Coming Later","This release tracks off-chain reward points. TON Connect, deposits, withdrawals and token claims are disabled until secure implementation and review."],
 withdraw:["Withdrawals Not Available","ZENQORY points currently have no cash value or withdrawal route. A token launch or exchange listing has not been promised."]
 };var item=info[kind]||info.support;modal(item[0],kind==="account"?connectionSummary():item[1]);}
@@ -156,11 +171,12 @@ async function loginTelegram(){
     telegramVerified=true;
     if(verified&&verified.first_name)state.firstName=String(verified.first_name).slice(0,60);
     var snapshot=await callApi("/me","GET");
-    normalize(snapshot);accountReady=true;DEMO=false;hideSessionGuide();busy=false;render();
+    normalize(snapshot);accountReady=true;DEMO=false;lastRefreshAt=now();hideSessionGuide();busy=false;render();
     notice("Your secure Telegram rewards account is connected.");
   }catch(error){setConnectionProblem(error);}
 }
 $("retry-login").addEventListener("click",loginTelegram);
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")refreshLiveState();});
 if(DEMO){
   loadPreview();
   sessionGuide("Interactive preview","This browser shows local demo points only. Open the official ZENQORY Telegram Mini App for a secure rewards account.");
