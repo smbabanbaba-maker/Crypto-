@@ -103,3 +103,27 @@ Public, non-secret diagnostic endpoint: GET /api/telegram/status. It reports whe
 Telegram's bot description supports animation through @BotFather > /mybots > ZENQORY > Edit Bot > Edit Description Picture. Upload the delivered ZENQORY_Bot_Description.gif (320x180 looping GIF) or ZENQORY_Telegram_Intro.mp4 (640x360 video). Uploading description media requires the owner to use BotFather, and is not done automatically by GitHub or the webhook. The concise English welcome copy synchronizes via GET /api/telegram/status.
 
 The /start, /app, /help, /status and /channel bot messages display a second inline button labelled Join Channel below Launch ZENQORY when the official community URL is known. In Vercel project crypto, set environment variable CHANNEL_URL (Production) to the real https://t.me/channel_username or a real private invite URL, then redeploy. The link is validated and does not fall back to a fabricated channel. Without CHANNEL_URL, launch works normally and /channel says the link is pending. CHANNEL_URL is NOT BOT_USERNAME.
+
+
+## Verified Missions & Referral Mining Boost (Genesis v1.3)
+
+### Rewards rules, enforced by the server
+
+- A farming cycle lasts **8 hours**, and the base reward is **80 ZNQY points**.
+- Each friend who signs up through the inviter's **personal Telegram referral link** and completes a real first farming claim becomes an active referral.
+- Each **active** referral adds **+2%** to the inviter's *future* farming rewards, capped at **+20%** (10 active referrals). Rounded whole-point examples: 0 → 80; 1 → 82; 3 → 85; 5 → 88; 10+ → 96 points per cycle.
+- The boosted payout is **calculated on the server and locked in the database at farm start**. Existing active cycles from before this version retain their originally earned 80-point payout. New referrals never retroactively modify a running cycle.
+- Inviter still receives the existing **+10 one-time referral bonus** after the invitee's first successful real farming claim. The bonus and mining boost are separate rewards.
+- **No mission reward is allowed just for tapping CLAIM.** The API checks real database facts before awarding points. Current missions retain their original stable IDs and once-only payouts (including grandfathered claims from earlier versions):
+  - `welcome` +30: Start a real farming cycle.
+  - `safety` +20: Complete and claim the first real farming cycle.
+  - `profile` +15: Invite a friend who completes the first real farming claim.
+- **When creating future missions:** first define and test a *server-verifiable* completion condition (such as a persisted farm cycle, referral activation or securely verified external service action). Only then add the task to the UI and reward allowlist. Never award rewards based solely on client-side clicks, localStorage, unverified URLs or user assertions.
+- Double payouts are blocked by PostgreSQL transactions, locked user rows and the unique `zen_tasks(user_id,task_id)` constraint. Browser demo balances are not real server rewards.
+- Frontend refreshes personal referral/boost stats on Friends, Home and Earn navigation, and when Telegram becomes visible (throttled to avoid excess database requests).
+
+### Verification before scaling
+
+CI runs Telegram auth and transactional PostgreSQL integration tests against an **isolated** disposable `zenqory_test` database. Destructive test operations explicitly refuse non-local / production Neon URLs.
+
+Production acceptance still requires one independent, real two-account Telegram invitation test and one full eight-hour claim, plus a passing GitHub Actions run. A Vercel `READY` build is not itself evidence of that end-to-end acceptance.
