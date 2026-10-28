@@ -32,9 +32,10 @@ jobs:
       DATABASE_URL: postgresql://zenqory_test:test-only-ephemeral-password@localhost:5432/zenqory_test
       BOT_TOKEN: 123456789:local-fixture-not-a-real-telegram-secret
       BOT_USERNAME: ZenqoryTestBot
+      ZENQORY_ALLOW_DESTRUCTIVE_TESTS: '1'
     steps:
       - name: Checkout reviewed source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9d9fe7b # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
       - name: Install isolated Python dependencies
