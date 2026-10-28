@@ -761,6 +761,7 @@ body.zen-loading{overflow:hidden}
 body.zen-loading .app-shell{visibility:hidden!important;pointer-events:none!important}
 body.zen-ready{overflow:auto}
 body.zen-ready .app-shell{visibility:visible!important}
+.zen-launch-screen[hidden]{display:none!important}
 body.zen-ready .zen-launch-screen{
   opacity:0;visibility:hidden;pointer-events:none;
   transition:opacity .16s ease-out,visibility 0s linear .16s
