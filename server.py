@@ -185,21 +185,21 @@ def ensure_user(conn, person: dict) -> int:
     with conn.cursor() as cursor:
         cursor.execute("SELECT id FROM zen_users WHERE id=%s", (uid,))
         if cursor.fetchone() is None:
-            # The signed Main Mini App start_param takes priority.
-            sponsor = referral_sponsor(person.get("start_param") or "", uid)
-            if sponsor is not None:
-                cursor.execute("SELECT id FROM zen_users WHERE id=%s", (sponsor,))
-                if not cursor.fetchone():
-                    sponsor = None
+            # A previously verified Bot /start invitation takes precedence.
+            # This prevents an invite from being overwritten before signup.
+            cursor.execute("""
+              SELECT sponsor_id FROM zen_referral_intents
+              WHERE invitee_id=%s AND expires_at >= %s
+            """, (uid, utc_ms()))
+            pending = cursor.fetchone()
+            sponsor = pending["sponsor_id"] if pending else None
             if sponsor is None:
-                # Fallback for users whose invite was a Bot /start ref_* link.
-                cursor.execute("""
-                  SELECT sponsor_id FROM zen_referral_intents
-                  WHERE invitee_id=%s AND expires_at >= %s
-                """, (uid, utc_ms()))
-                pending = cursor.fetchone()
-                if pending:
-                    sponsor = pending["sponsor_id"]
+                # Otherwise use Telegram's signed Main Mini App start_param.
+                sponsor = referral_sponsor(person.get("start_param") or "", uid)
+                if sponsor is not None:
+                    cursor.execute("SELECT id FROM zen_users WHERE id=%s", (sponsor,))
+                    if not cursor.fetchone():
+                        sponsor = None
             cursor.execute("""
               INSERT INTO zen_users(id,first_name,referred_by,created_at)
               VALUES(%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING
@@ -479,7 +479,7 @@ def _setup_telegram_bot() -> dict:
         ]
     }, token)
     _bot_api("setMyShortDescription", {
-        "short_description": "ZENQORY | Farm reward points, complete missions, invite friends. Genesis preview."
+        "short_description": "ZENQORY | Farm points, complete missions and invite friends. Genesis network."
     }, token)
     _bot_api("setMyDescription", {
         "description": ZENQORY_BOT_DESCRIPTION
@@ -580,14 +580,14 @@ async def telegram_webhook(request: Request,
             "Use /start or /app to open the Mini App.\n"
             "Farming: start an 8-hour cycle, then claim points.\n"
             "Missions and daily rewards can earn additional points.\n\n"
-            "Current phase: preview. Demo points stay on your device until "
-            "secure live storage is configured."
+            "ZNQY points are pre-launch, off-chain community rewards. "
+            "Open the official Mini App from Telegram to use your verified account."
         )
     elif command == "/status":
         greeting = (
             "🟢 ZENQORY Mini App is available.\n"
-            "🧪 Rewards: preview mode until database is connected.\n"
-            "Tap below to launch."
+            "🔐 Open the app through Telegram to access your secure reward points.\n"
+            "ZNQY rewards are currently off-chain pre-launch points."
         )
     else:
         greeting = "💚 Welcome to ZENQORY! Tap the button below, or use /help."
