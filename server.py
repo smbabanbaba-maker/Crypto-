@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from starlette.concurrency import run_in_threadpool
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlsplit
 import re
 
 from fastapi import FastAPI, Header, HTTPException
@@ -48,6 +48,24 @@ def task_eligibility(farm_start: int | None, farm_count: int, active_referrals: 
         "safety": farm_count > 0,
         "profile": active_referrals > 0,
     }
+
+def trusted_telegram_photo(value) -> str | None:
+    """Only Telegram HTTPS avatar URLs from cryptographically signed initData."""
+    if not isinstance(value, str) or not value or len(value) > 2048:
+        return None
+    try:
+        parsed = urlsplit(value)
+        host = (parsed.hostname or "").lower()
+        allowed = (host in ("t.me", "telegram.org", "telegram-cdn.org", "cdn-telegram.org")
+                   or host.endswith((".telegram.org", ".telegram-cdn.org", ".cdn-telegram.org")))
+        if (parsed.scheme != "https" or not allowed or not parsed.path.startswith("/")
+                or parsed.username or parsed.password or parsed.port not in (None, 443)
+                or parsed.fragment):
+            return None
+        return value
+    except ValueError:
+        return None
+
 
 app = FastAPI(title="ZENQORY Rewards", docs_url=None, redoc_url=None, openapi_url=None)
 _schema_ready = False
@@ -90,6 +108,7 @@ def telegram_identity(raw: str) -> dict:
         return {
             "id": user_id,
             "first_name": str(telegram_user.get("first_name") or "Explorer")[:60],
+            "photo_url": trusted_telegram_photo(telegram_user.get("photo_url")),
             "start_param": str(data.get("start_param") or "")[:100],
         }
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, OverflowError) as exc:
@@ -128,6 +147,10 @@ def schema(conn):
             referral_points BIGINT NOT NULL DEFAULT 0,
             created_at BIGINT NOT NULL
         )""")
+        # Nullable: old accounts migrate in place, without touching rewards.
+        cursor.execute("""
+        ALTER TABLE zen_users ADD COLUMN IF NOT EXISTS photo_url TEXT
+        """)
         # Existing active farms keep their original 80-point reward. The
         # reward for new cycles is frozen at the start of each cycle.
         cursor.execute("""
@@ -227,12 +250,13 @@ def ensure_user(conn, person: dict) -> int:
                     if not cursor.fetchone():
                         sponsor = None
             cursor.execute("""
-              INSERT INTO zen_users(id,first_name,referred_by,created_at)
-              VALUES(%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING
-            """, (uid, person["first_name"], sponsor, utc_ms()))
+              INSERT INTO zen_users(id,first_name,photo_url,referred_by,created_at)
+              VALUES(%s,%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING
+            """, (uid, person["first_name"], person.get("photo_url"), sponsor, utc_ms()))
         # Mark the invite consumed without letting future links change this user.
         cursor.execute("DELETE FROM zen_referral_intents WHERE invitee_id=%s", (uid,))
-        cursor.execute("UPDATE zen_users SET first_name=%s WHERE id=%s", (person["first_name"], uid))
+        cursor.execute("UPDATE zen_users SET first_name=%s,photo_url=%s WHERE id=%s",
+                       (person["first_name"], person.get("photo_url"), uid))
     return uid
 
 def activity(conn, user_id: int, title: str, amount: int):
@@ -257,6 +281,17 @@ def get_snapshot(conn, user_id: int) -> dict:
         referral_stats = cursor.fetchone()
         referrals = referral_stats["n"]
         active_referrals = referral_stats["active_n"]
+        # Members are visible only to their verified inviter; no public list.
+        cursor.execute("""
+          SELECT first_name,photo_url,farm_count
+          FROM zen_users WHERE referred_by=%s
+          ORDER BY created_at DESC,id DESC LIMIT 12
+        """, (user_id,))
+        referral_members = [{
+            "firstName": row["first_name"],
+            "photoUrl": row["photo_url"],
+            "active": row["farm_count"] > 0,
+        } for row in cursor.fetchall()]
         cursor.execute("""
           SELECT activity_type,points,created_at FROM zen_activity
           WHERE user_id=%s ORDER BY id DESC LIMIT 15
@@ -269,6 +304,8 @@ def get_snapshot(conn, user_id: int) -> dict:
     return {
         "id": str(u["id"]),
         "firstName": u["first_name"],
+        "photoUrl": u["photo_url"],
+        "referralMembers": referral_members,
         "balance": u["balance"],
         "farmStart": u["farm_start"],
         "farmCount": u["farm_count"],
