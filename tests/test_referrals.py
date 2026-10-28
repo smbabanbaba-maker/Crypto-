@@ -295,6 +295,136 @@ class RewardsAndReferrals(unittest.TestCase):
         self.assertEqual(server.task_eligibility(None, 1, 1),
                          {"welcome": True, "safety": True, "profile": True})
 
+    def test_admin_is_fail_closed_and_dashboard_requires_telegram_id(self):
+        # Without explicitly configured owner ID nobody, even a valid user, is admin.
+        with patch.dict(os.environ, {"ZENQORY_ADMIN_TELEGRAM_ID": ""}):
+            self.assertEqual(self.client.get("/api/admin/overview").status_code, 401)
+            r = self.client.get("/api/admin/overview", headers=headers(INVITER))
+            self.assertEqual(r.status_code, 403)
+            self.assertFalse(self.client.get("/api/me", headers=headers(INVITER)).json()["isAdmin"])
+            self.assertEqual(self.client.post("/api/admin/missions",
+                headers=headers(INVITER), json={
+                    "name": "Three farm claims", "description": "Complete three farming cycles",
+                    "kind": "farm_cycles", "target": 3, "points": 20,
+                }).status_code, 403)
+        with patch.dict(os.environ, {"ZENQORY_ADMIN_TELEGRAM_ID": str(INVITER)}):
+            self.assertEqual(self.client.get("/api/admin/overview",
+                headers=headers(INVITEE)).status_code, 403)
+            mine = self.client.get("/api/me", headers=headers(INVITER))
+            self.assertTrue(mine.json()["isAdmin"])
+            overview = self.client.get("/api/admin/overview", headers=headers(INVITER))
+            self.assertEqual(overview.status_code, 200, overview.text)
+            self.assertGreaterEqual(len(overview.json()["missions"]), 3)
+
+    def test_admin_mission_creation_progress_rewards_and_audit(self):
+        with patch.dict(os.environ, {"ZENQORY_ADMIN_TELEGRAM_ID": str(INVITER)}):
+            self.assertEqual(self.client.get("/api/me", headers=headers(INVITER)).status_code, 200)
+            created = self.client.post("/api/admin/missions", headers=headers(INVITER), json={
+                "name": "Complete two farming cycles",
+                "description": "Finish two 8-hour farming cycles to earn a reward",
+                "kind": "farm_cycles", "target": 2, "points": 45,
+            })
+            self.assertEqual(created.status_code, 200, created.text)
+            mid = created.json()["id"]
+            user_hdr = headers(INVITEE)
+            snapshot = self.client.get("/api/me", headers=user_hdr).json()
+            custom = next(x for x in snapshot["missions"] if x["id"] == mid)
+            self.assertFalse(custom["eligible"])
+            self.assertEqual(custom["progress"], 0)
+            self.assertEqual(self.client.post("/api/tasks/" + mid,
+                headers=user_hdr).status_code, 409)
+            self.assertEqual(self.client.post("/api/farm/start",
+                headers=user_hdr).status_code, 200)
+            future = int(time.time() * 1000) + server.FARM_MS + 2000
+            with patch.object(server, "utc_ms", return_value=future):
+                claimed = self.client.post("/api/farm/claim", headers=user_hdr)
+            self.assertEqual(claimed.status_code, 200, claimed.text)
+            self.assertEqual(self.client.post("/api/tasks/" + mid,
+                headers=user_hdr).status_code, 409)
+            self.assertEqual(self.client.post("/api/farm/start",
+                headers=user_hdr).status_code, 200)
+            with patch.object(server, "utc_ms", return_value=future):
+                claimed = self.client.post("/api/farm/claim", headers=user_hdr)
+            self.assertEqual(claimed.status_code, 200, claimed.text)
+            paid = self.client.post("/api/tasks/" + mid, headers=user_hdr)
+            self.assertEqual(paid.status_code, 200, paid.text)
+            self.assertEqual(paid.json()["balance"], 2 * server.FARM_REWARD + 45)
+            self.assertEqual(self.client.post("/api/tasks/" + mid,
+                headers=user_hdr).status_code, 409)
+
+            # Owner can update future rewards, never retroactively duplicate points.
+            updated = self.client.patch("/api/admin/missions/" + mid,
+                headers=headers(INVITER), json={"points": 60, "enabled": False})
+            self.assertEqual(updated.status_code, 200, updated.text)
+            self.assertEqual(self.client.post("/api/tasks/" + mid,
+                headers=user_hdr).status_code, 404)
+            dashboard = self.client.get("/api/admin/overview",
+                headers=headers(INVITER)).json()
+            managed = next(x for x in dashboard["missions"] if x["id"] == mid)
+            self.assertEqual(managed["claims"], 1)
+            self.assertEqual(managed["reward"], 60)
+            self.assertFalse(managed["enabled"])
+            self.assertEqual([x["action"] for x in dashboard["audit"][:2]],
+                             ["update", "create"])
+
+    def test_channel_task_requires_real_telegram_membership(self):
+        bot_id = 91234567
+        user_is_member = {"value": False}
+        def telegram_api(method, payload, token):
+            if method == "getMe":
+                return {"ok": True, "result": {"id": bot_id}}
+            if method == "getChatMember":
+                if payload["user_id"] == bot_id:
+                    return {"ok": True, "result": {"status": "administrator"}}
+                return {"ok": True, "result": {
+                    "status": "member" if user_is_member["value"] else "left"
+                }}
+            raise AssertionError("Unexpected Telegram method")
+
+        with patch.dict(os.environ, {"ZENQORY_ADMIN_TELEGRAM_ID": str(INVITER)}):
+            with patch.object(server, "_bot_api", side_effect=telegram_api):
+                admin_hdr = headers(INVITER)
+                mission_payload = {
+                    "name": "Join ZENQORY updates",
+                    "description": "Join our verified Telegram community channel",
+                    "kind": "telegram_channel", "target": 1, "points": 25,
+                    "channel": "@OfficialZenqory",
+                }
+                created = self.client.post("/api/admin/missions",
+                    headers=admin_hdr, json=mission_payload)
+                self.assertEqual(created.status_code, 200, created.text)
+                mid = created.json()["id"]
+                member_hdr = headers(INVITEE)
+                snapshot = self.client.get("/api/me", headers=member_hdr).json()
+                task = next(x for x in snapshot["missions"] if x["id"] == mid)
+                self.assertEqual(task["link"], "https://t.me/OfficialZenqory")
+                self.assertTrue(task["verificationRequired"])
+                denied = self.client.post("/api/tasks/" + mid, headers=member_hdr)
+                self.assertEqual(denied.status_code, 409)
+                self.assertEqual(self.client.get("/api/me", headers=member_hdr).json()["balance"], 0)
+                user_is_member["value"] = True
+                earned = self.client.post("/api/tasks/" + mid, headers=member_hdr)
+                self.assertEqual(earned.status_code, 200, earned.text)
+                self.assertEqual(earned.json()["balance"], 25)
+                self.assertEqual(self.client.post("/api/tasks/" + mid,
+                    headers=member_hdr).status_code, 409)
+
+    def test_admin_rejects_unverifiable_mission_origins(self):
+        with patch.dict(os.environ, {"ZENQORY_ADMIN_TELEGRAM_ID": str(INVITER)}):
+            req = {
+                "name": "Watch random video",
+                "description": "Click an unverified external site",
+                "kind": "telegram_channel", "target": 1,
+                "points": 20, "channel": "https://example.com/scam",
+            }
+            denied = self.client.post("/api/admin/missions",
+                headers=headers(INVITER), json=req)
+            self.assertEqual(denied.status_code, 422)
+            req["kind"] = "farm_cycles"
+            denied = self.client.post("/api/admin/missions",
+                headers=headers(INVITER), json=req)
+            self.assertEqual(denied.status_code, 422)
+
     def test_simultaneous_daily_claims_only_one_succeeds(self):
         hdr = headers(INVITER)
         self.assertEqual(self.client.get("/api/me", headers=hdr).status_code, 200)
