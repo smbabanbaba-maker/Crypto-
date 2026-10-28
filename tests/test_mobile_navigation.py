@@ -15,9 +15,9 @@ PUBLIC = Path(__file__).resolve().parents[1] / "public"
 class MobileNavigationContract(unittest.TestCase):
     def test_ready_shell_remains_flex_after_launch(self):
         css = (PUBLIC / "styles.css").read_text(encoding="utf-8")
-        matches = re.findall(r"body\\.zen-ready\\s+\\.app-shell\\s*\\{([^{}]*)\\}", css)
+        matches = re.findall(r"body\.zen-ready\s+\.app-shell\s*\{([^{}]*)\}", css)
         self.assertTrue(matches, "Ready-app CSS rule must exist")
-        last = matches[-1].replace(" ", "").replace("\\n", "")
+        last = matches[-1].replace(" ", "").replace("\n", "")
         self.assertIn("display:flex!important", last)
         self.assertIn("flex-direction:column!important", last)
         self.assertNotIn("display:block", last)
