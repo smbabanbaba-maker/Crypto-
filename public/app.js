@@ -66,23 +66,54 @@ async function refreshLiveState(){
   }finally{refreshing=false;}
 }
 function openTab(name){if(["home","earn","friends","wallet","profile","admin"].indexOf(name)<0)return;if(name==="admin"&&(!accountReady||!state.isAdmin)){notice("Administrator access is restricted.");return;}tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});var page=document.querySelector(".screen.active");if(page){page.scrollTop=0;}try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}if(name==="friends"||name==="home"||name==="earn")refreshLiveState();if(name==="admin")loadAdminOverview();}
-function renderFarming(){var begin=state.farmStart,elapsed=begin===null?0:Math.max(0,now()-begin),progress=begin===null?0:Math.min(100,100*elapsed/FARM_MS),ready=begin!==null&&elapsed>=FARM_MS;
-$("farm-timer").textContent=begin===null?"08:00:00":ready?"00:00:00":clock(FARM_MS-elapsed);
-$("farm-caption").textContent=begin===null?"AWAITING ACTIVATION":ready?"REWARD READY":"FARMING PROTOCOL ACTIVE";
-$("farm-state").textContent=begin===null?"READY TO FARM":ready?"CYCLE COMPLETE":"MINING POINTS";
-$("farm-percent").textContent=Math.floor(progress)+"%";
-var farmingCard=document.querySelector(".farm-card");if(farmingCard)farmingCard.dataset.phase=begin===null?"standby":ready?"ready":"active";
-$("protocol-state").textContent=begin===null?"STANDBY":ready?"CLAIM READY":"FARMING";
-$("protocol-progress").textContent=Math.floor(progress)+"%";
-$("protocol-cycles").textContent=fmt(state.farmCount);
-$("farm-progress").style.width=progress+"%";
-$("radial-progress").style.background="conic-gradient(#70ff8f "+(progress*3.6)+"deg,#183e26 "+(progress*3.6)+"deg)";
-var fb=$("farm-button");fb.disabled=busy||(!DEMO&&!accountReady)||(begin!==null&&!ready);
-var claimAmount=Math.max(80,Math.min(96,Number(state.farmReward)||80));
-fb.innerHTML=logoIcon("i-lightning")+"<span>"+(begin===null?"START FARMING":ready?"CLAIM +"+fmt(claimAmount)+" POINTS":"FARMING IN PROGRESS")+"</span>"+logoIcon("i-arrow");
-if(DEMO&&begin!==null&&!ready){if(!demoFinish){demoFinish=document.createElement("button");demoFinish.type="button";demoFinish.className="demo-fast";demoFinish.textContent="Preview: finish this cycle";demoFinish.addEventListener("click",function(){state.farmStart=now()-FARM_MS;persist();render();notice("Cycle completed in preview — Claim is ready");});$("farm-button").after(demoFinish);}demoFinish.hidden=false;}else if(demoFinish){demoFinish.hidden=true;}
-var dailyReady=!state.lastDaily||now()-state.lastDaily>=DAILY_MS;
-$("daily-card").disabled=busy||(!DEMO&&!accountReady)||!dailyReady;$("daily-status").textContent=dailyReady?"READY TO CLAIM":"NEXT IN "+clock(DAILY_MS-(now()-state.lastDaily));$("daily-sub").textContent=dailyReady?"Collect +20 daily points":"Already claimed this cycle";
+function renderFarming(){
+  var begin=state.farmStart,elapsed=begin===null?0:Math.max(0,now()-begin);
+  var progress=begin===null?0:Math.min(100,100*elapsed/FARM_MS);
+  var ready=begin!==null&&elapsed>=FARM_MS;
+  setTextIfChanged($("farm-timer"),begin===null?"08:00:00":ready?"00:00:00":clock(FARM_MS-elapsed));
+  setTextIfChanged($("farm-caption"),begin===null?"AWAITING ACTIVATION":ready?"REWARD READY":"FARMING PROTOCOL ACTIVE");
+  setTextIfChanged($("farm-state"),begin===null?"READY TO FARM":ready?"CYCLE COMPLETE":"MINING POINTS");
+  setTextIfChanged($("farm-percent"),Math.floor(progress)+"%");
+  var farmingCard=document.querySelector(".farm-card");
+  var phase=begin===null?"standby":ready?"ready":"active";
+  if(farmingCard&&farmingCard.dataset.phase!==phase)farmingCard.dataset.phase=phase;
+  setTextIfChanged($("protocol-state"),begin===null?"STANDBY":ready?"CLAIM READY":"FARMING");
+  setTextIfChanged($("protocol-progress"),Math.floor(progress)+"%");
+  setTextIfChanged($("protocol-cycles"),fmt(state.farmCount));
+  // The radial display only needs a 0.1% step (~29 seconds per active cycle).
+  // Avoid recomputing gradient and triggering a GPU paint 28,800 times/cycle.
+  var displayedProgress=ready?100:Math.floor(progress*10)/10;
+  if($("radial-progress").dataset.percent!==String(displayedProgress)){
+    $("radial-progress").dataset.percent=String(displayedProgress);
+    $("farm-progress").style.width=displayedProgress+"%";
+    $("radial-progress").style.background="conic-gradient(#70ff8f "+(displayedProgress*3.6)+"deg,#183e26 "+(displayedProgress*3.6)+"deg)";
+  }
+  var fb=$("farm-button");
+  var disabled=busy||(!DEMO&&!accountReady)||(begin!==null&&!ready);
+  if(fb.disabled!==disabled)fb.disabled=disabled;
+  var claimAmount=Math.max(80,Math.min(96,Number(state.farmReward)||80));
+  var label=begin===null?"START FARMING":ready?"CLAIM +"+fmt(claimAmount)+" POINTS":"FARMING IN PROGRESS";
+  // Rebuilding the button SVG every second caused unnecessary WebView repaints.
+  if(fb.dataset.actionLabel!==label){
+    fb.dataset.actionLabel=label;
+    fb.innerHTML=logoIcon("i-lightning")+"<span>"+label+"</span>"+logoIcon("i-arrow");
+  }
+  if(DEMO&&begin!==null&&!ready){
+    if(!demoFinish){
+      demoFinish=document.createElement("button");demoFinish.type="button";
+      demoFinish.className="demo-fast";demoFinish.textContent="Preview: finish this cycle";
+      demoFinish.addEventListener("click",function(){
+        state.farmStart=now()-FARM_MS;persist();render();notice("Cycle completed in preview — Claim is ready");
+      });
+      fb.after(demoFinish);
+    }
+    demoFinish.hidden=false;
+  }else if(demoFinish){demoFinish.hidden=true;}
+  var dailyReady=!state.lastDaily||now()-state.lastDaily>=DAILY_MS;
+  var dailyDisabled=busy||(!DEMO&&!accountReady)||!dailyReady;
+  if($("daily-card").disabled!==dailyDisabled)$("daily-card").disabled=dailyDisabled;
+  setTextIfChanged($("daily-status"),dailyReady?"READY TO CLAIM":"NEXT IN "+clock(DAILY_MS-(now()-state.lastDaily)));
+  setTextIfChanged($("daily-sub"),dailyReady?"Collect +20 daily points":"Already claimed this cycle");
 }
 function missionCatalog(){return !DEMO&&Array.isArray(state.missions)?state.missions:tasks;}
 function missionUnlocked(id){
@@ -176,9 +207,10 @@ function safeAvatarURL(value){
 function placeAvatar(element,photo,name){
   if(!element)return;
   var url=safeAvatarURL(photo),initial=(String(name||"Z").trim().charAt(0)||"Z").toUpperCase();
-  if(element.dataset.avatarSource===url&&element.dataset.avatarInitial===initial&&(!url||element.querySelector("img")))return;
+  if(element.dataset.avatarSource===url&&element.dataset.avatarInitial===initial&&(!url||element.querySelector("img")||element.dataset.avatarFailed===url))return;
   element.dataset.avatarSource=url;
   element.dataset.avatarInitial=initial;
+  element.dataset.avatarFailed="";
   element.textContent=initial;
   if(!url)return;
   var img=document.createElement("img");
@@ -187,7 +219,7 @@ function placeAvatar(element,photo,name){
   img.referrerPolicy="no-referrer";
   img.loading="lazy";
   img.decoding="async";
-  img.addEventListener("error",function(){img.remove();});
+  img.addEventListener("error",function(){img.remove();element.dataset.avatarFailed=url;});
   img.src=url;
   element.appendChild(img);
 }
@@ -199,6 +231,11 @@ function renderNetwork(){
   var root=$("network-nodes");
   if(!root)return;
   var people=Array.isArray(state.referralMembers)?state.referralMembers.slice(0,12):[];
+  // Keep existing Telegram images mounted if the same snapshot is received.
+  // Recreating all image elements on refresh caused visible blinking.
+  var mapKey=JSON.stringify([Number(state.refCount)||0,people]);
+  if(root.dataset.mapKey===mapKey)return;
+  root.dataset.mapKey=mapKey;
   root.replaceChildren();
   root.classList.toggle("network-has-members",people.length>0);
   if(!people.length){
@@ -253,7 +290,7 @@ function renderCyber(){
   if(!entries.length){feed.innerHTML='<div class="signal-entry signal-empty">'+logoIcon("i-spark")+'<span>Your reward activity will appear here after your first claim.</span></div>';}
   else{feed.replaceChildren();entries.forEach(function(row){var el=document.createElement("div");el.className="signal-entry";var ico=document.createElement("span");ico.className="signal-entry-icon";ico.innerHTML=logoIcon("i-spark");var label=document.createElement("span");label.className="signal-entry-label";label.textContent=String(row.type||"Reward");var amount=document.createElement("strong");amount.textContent="+"+fmt(row.amount)+" PTS";el.append(ico,label,amount);feed.appendChild(el);});}
 }
-function render(){document.querySelectorAll("[data-balance]").forEach(function(node){node.textContent=fmt(state.balance);});var name=String(state.firstName||"Explorer").slice(0,55);$("profile-name").textContent=name;$("profile-initial").textContent=(name[0]||"Z").toUpperCase();$("profile-farms").textContent=fmt(state.farmCount);$("profile-friends").textContent=fmt(state.refCount);$("top-level").textContent=Math.max(1,1+Math.floor((state.farmCount||0)/5));$("profile-member").textContent=DEMO?"PREVIEW MEMBER":accountReady?"TELEGRAM MEMBER #"+String(state.id).slice(-6):"SECURE LOGIN REQUIRED";$("friends-total").textContent=fmt(state.refCount);$("friends-active").textContent=fmt(state.activeRefCount||0);$("friends-points").textContent=fmt(state.refPoints);$("quick-referrals").textContent=fmt(state.refCount)+" FRIENDS JOINED";$("referral-code").textContent=referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite";$("copy-referral").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-button").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-bot-button").disabled=!referralBotLink||!accountReady;$("connection-card").hidden=DEMO||accountReady;$("connection-help").textContent=connectionSummary();$("admin-entry").hidden=!(accountReady&&state.isAdmin);renderFarming();renderMissions();renderActivity();renderCyber();renderMiningBoost();renderNetwork();}
+function render(){document.querySelectorAll("[data-balance]").forEach(function(node){node.textContent=fmt(state.balance);});var name=String(state.firstName||"Explorer").slice(0,55);$("profile-name").textContent=name;/* Profile avatar is maintained by placeAvatar; do not destroy its image. */$("profile-farms").textContent=fmt(state.farmCount);$("profile-friends").textContent=fmt(state.refCount);$("top-level").textContent=Math.max(1,1+Math.floor((state.farmCount||0)/5));$("profile-member").textContent=DEMO?"PREVIEW MEMBER":accountReady?"TELEGRAM MEMBER #"+String(state.id).slice(-6):"SECURE LOGIN REQUIRED";$("friends-total").textContent=fmt(state.refCount);$("friends-active").textContent=fmt(state.activeRefCount||0);$("friends-points").textContent=fmt(state.refPoints);$("quick-referrals").textContent=fmt(state.refCount)+" FRIENDS JOINED";$("referral-code").textContent=referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite";$("copy-referral").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-button").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-bot-button").disabled=!referralBotLink||!accountReady;$("connection-card").hidden=DEMO||accountReady;$("connection-help").textContent=connectionSummary();$("admin-entry").hidden=!(accountReady&&state.isAdmin);renderFarming();renderMissions();renderActivity();renderCyber();renderMiningBoost();renderNetwork();}
 async function startOrClaim(){if(state.farmStart===null){await perform("/farm/start",function(){state.farmStart=now();state.farmReward=Number(state.nextFarmReward)||80;},"Farming activated. Your 8-hour cycle has started.");}else if(now()-state.farmStart>=FARM_MS){var reward=Math.max(80,Math.min(96,Number(state.farmReward)||80));await perform("/farm/claim",function(){state.farmStart=null;state.farmCount+=1;state.balance+=reward;record("Farming reward",reward);},"Success! You claimed "+reward+" ZENQORY points.");}}
 function claimDaily(){if(state.lastDaily&&now()-state.lastDaily<DAILY_MS)return;perform("/daily",function(){state.lastDaily=now();state.balance+=20;record("Daily reward",20);},"+20 points added to your rewards balance");}
 function claimTask(id){var task=missionCatalog().find(function(t){return t.id===id;});if(!task||state.tasks.indexOf(id)!==-1)return;
@@ -491,5 +528,5 @@ if(DEMO){
   // Do not call bot diagnostics on every open; signed account loading is enough.
   loginTelegram(false);
 }
-setInterval(function(){renderFarming();if(tab==="earn")$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";},1000);
+setInterval(function(){if(!hasLaunched||document.hidden)return;renderFarming();if(tab==="earn")setTextIfChanged($("earn-daily"),(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED");},1000);
 })();
