@@ -10,9 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="/styles.css?v=admin-v1" rel="stylesheet">
+  <link href="/styles.css?v=admin-v2" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/app.js?v=admin-v1" defer></script>
+  <script src="/app.js?v=admin-v2" defer></script>
 </head>
 <body>
 <svg class="svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -135,7 +135,7 @@
      <div class="admin-metric"><small>TOTAL USERS</small><strong id="admin-stat-users">—</strong></div>
      <div class="admin-metric"><small>ACTIVE FARMERS</small><strong id="admin-stat-active">—</strong></div>
      <div class="admin-metric"><small>REFERRALS</small><strong id="admin-stat-invites">—</strong></div>
-     <div class="admin-metric"><small>POINTS ISSUED*</small><strong id="admin-stat-points">—</strong></div>
+     <div class="admin-metric"><small>POINTS BALANCE*</small><strong id="admin-stat-points">—</strong></div>
      <div class="admin-metric"><small>FARM CLAIMS</small><strong id="admin-stat-farms">—</strong></div>
      <div class="admin-metric"><small>MISSION CLAIMS</small><strong id="admin-stat-claims">—</strong></div>
    </div>
@@ -155,6 +155,8 @@
    </form>
    <div class="dashboard-heading"><h3>MISSION MANAGEMENT</h3><span class="tag-outline" id="admin-mission-count">0 TASKS</span></div>
    <div class="admin-mission-list" id="admin-missions"><p class="admin-placeholder">Your missions will appear here.</p></div>
+   <div class="dashboard-heading"><h3>REWARD ACTIVITY</h3><span class="tag-outline">LATEST 20</span></div>
+   <div id="admin-rewards" class="admin-data-list"><p class="admin-placeholder">Recent rewards will appear here.</p></div>
    <div class="dashboard-heading"><h3>RECENT MEMBERS</h3><span class="tag-outline">LATEST 10</span></div>
    <div id="admin-users" class="admin-data-list"><p class="admin-placeholder">Members will appear here.</p></div>
    <div class="dashboard-heading"><h3>ADMIN CHANGE LOG</h3></div>
