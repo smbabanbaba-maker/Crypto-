@@ -862,3 +862,10 @@ body.zen-ready .app-shell>.bottom-nav .nav-item{
   min-height:48px;pointer-events:auto;touch-action:manipulation;
 }
 body.zen-ready .zen-launch-screen{pointer-events:none!important}
+
+
+/* Bot-first invitation onboarding guidance */
+.referral-onboarding-hint{display:flex;align-items:center;justify-content:space-between;gap:5px;margin:12px 0 0;padding:10px 8px;border:1px solid rgba(107,239,140,.22);border-radius:9px;background:rgba(6,26,13,.72)}
+.referral-onboarding-hint>span{flex:1;min-width:0;text-align:center;color:#b7edc1;font:700 clamp(8px,2vw,10px) var(--display);letter-spacing:.15px}
+.referral-onboarding-hint>span+span{border-left:1px solid rgba(103,238,140,.22)}
+@media(max-width:355px){.referral-onboarding-hint{gap:2px;padding:9px 3px}.referral-onboarding-hint>span{font-size:8px}}
