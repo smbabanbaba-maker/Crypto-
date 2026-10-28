@@ -808,7 +808,7 @@ body{overscroll-behavior-y:none}
 .zen-launch-screen:before{background:radial-gradient(ellipse at 50% 40%,#123722 0%,#07150d 42%,#050b07 82%)!important}
 .zen-launch-panel{contain:layout style}
 body.zen-loading .app-shell{display:none!important}
-body.zen-ready .app-shell{display:block!important}
+body.zen-ready .app-shell{display:flex!important;flex-direction:column!important;min-height:0!important;overflow:hidden!important}
 body.zen-ready .zen-launch-screen{transition:opacity .12s linear,visibility 0s linear .12s!important}
 .screen.active{animation:none!important}
 .screen:not(.active){display:none!important}
@@ -848,3 +848,17 @@ body.zen-ready .zen-launch-screen{transition:opacity .12s linear,visibility 0s l
 .zen-launch-retry[hidden]{display:none!important}
 .zen-launch-retry{margin-top:20px;padding:13px 24px;border:1px solid #73ee95;border-radius:12px;background:#153b23;color:#e7ffed;font:800 11px var(--display);letter-spacing:1px;box-shadow:0 0 18px #42db6830}
 .zen-launch-retry:active{transform:scale(.98)}
+
+/* Launch layout protection: header and navigation remain tappable in Telegram. */
+body.zen-ready .app-shell>.topbar{flex:0 0 auto;z-index:35;pointer-events:auto}
+body.zen-ready .app-shell>.topbar button{pointer-events:auto;touch-action:manipulation}
+body.zen-ready .app-shell>.screen.active{flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden}
+body.zen-ready .app-shell>.bottom-nav{
+  display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  flex:0 0 auto;z-index:50;pointer-events:auto;touch-action:manipulation;
+  background:#09170f;
+}
+body.zen-ready .app-shell>.bottom-nav .nav-item{
+  min-height:48px;pointer-events:auto;touch-action:manipulation;
+}
+body.zen-ready .zen-launch-screen{pointer-events:none!important}
