@@ -3,17 +3,17 @@
 "use strict";
 var tg=window.Telegram&&window.Telegram.WebApp;
 try{if(tg){tg.ready();tg.expand();tg.setHeaderColor("#030605");tg.setBackgroundColor("#030605");}}catch(e){}
-var hasTelegramSession=!!(tg&&tg.initData),DEMO=!hasTelegramSession,FARM_MS=8*60*60*1000,DAILY_MS=24*60*60*1000;
+var hasTelegramSession=!!(tg&&tg.initData),isTelegramClient=!!(tg&&tg.platform&&tg.platform!=="unknown"),DEMO=!hasTelegramSession&&!isTelegramClient,FARM_MS=8*60*60*1000,DAILY_MS=24*60*60*1000;
 var tasks=[{id:"welcome",name:"Explore ZENQORY",desc:"Discover your new digital rewards space",reward:30,icon:"i-spark"},{id:"safety",name:"Learn about reward points",desc:"Understand our pre-launch points system",reward:20,icon:"i-shield"},{id:"profile",name:"View your profile",desc:"Discover your Explorer identity",reward:15,icon:"i-user"}];
 var $=function(id){return document.getElementById(id);};
 var empty=function(){return{balance:0,farmStart:null,farmCount:0,lastDaily:null,tasks:[],refCount:0,refPoints:0,firstName:"Explorer",id:"Preview",history:[]};};
-var state=empty(),referralLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var botReady=false,telegramVerified=false,botUsername="",connectionIssue="";var APP_URL="https://crypto-jade-nine.vercel.app";
+var state=empty(),referralLink="",referralBotLink="",tab="home",busy=false,toastTimeout=null,demoFinish=null;var botReady=false,telegramVerified=false,accountReady=false,botUsername="",connectionIssue="";var APP_URL="https://crypto-jade-nine.vercel.app";
 var fmt=function(n){return new Intl.NumberFormat("en-US").format(Math.max(0,Math.floor(Number(n)||0)));};
 var logoIcon=function(icon){return '<svg aria-hidden="true"><use href="#'+icon+'"></use></svg>';};
 var now=function(){return Date.now();};
-function normalize(data){if(!data||typeof data!=="object")return;state=Object.assign({},state,data);if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.history))state.history=[];if(typeof data.referralLink==="string")referralLink=data.referralLink;}
+function normalize(data){if(!data||typeof data!=="object")return;state=Object.assign({},state,data);if(!Array.isArray(state.tasks))state.tasks=[];if(!Array.isArray(state.history))state.history=[];if(typeof data.referralLink==="string")referralLink=data.referralLink;if(typeof data.referralBotLink==="string")referralBotLink=data.referralBotLink;}
 function previewKey(){var user=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;return user&&user.id?"zenqory-v3-demo-"+String(user.id):"zenqory-v3-demo";}
-function loadPreview(){state=empty();var person=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;try{normalize(JSON.parse(localStorage.getItem(previewKey())||"null"));}catch(e){}if(person&&person.first_name)state.firstName=String(person.first_name).slice(0,60);referralLink=APP_URL;DEMO=true;render();}
+function loadPreview(){state=empty();var person=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;try{normalize(JSON.parse(localStorage.getItem(previewKey())||"null"));}catch(e){}if(person&&person.first_name)state.firstName=String(person.first_name).slice(0,60);referralLink=APP_URL;referralBotLink="";DEMO=true;render();}
 function persist(){if(DEMO){try{localStorage.setItem(previewKey(),JSON.stringify(state));}catch(e){}}}
 function notice(message){var box=$("toast");box.textContent=message;box.classList.add("visible");clearTimeout(toastTimeout);toastTimeout=setTimeout(function(){box.classList.remove("visible");},3300);}
 function modal(title,description){$("modal-title").textContent=title;$("modal-description").textContent=description;$("modal-backdrop").hidden=false;}
@@ -23,16 +23,16 @@ function sessionGuide(title,description){
 }
 function hideSessionGuide(){connectionIssue="";}
 function connectionSummary(){
-  if(!DEMO)return "Telegram identity verified. Your live rewards account is connected.";
-  if(telegramVerified)return "Telegram identity verified. Rewards are currently in local demo mode because a database is not connected.";
-  if(connectionIssue)return connectionIssue+" Demo points are stored only on this device and are not real account rewards.";
+  if(accountReady)return "Telegram identity verified. Your reward points are securely stored on the server.";
+  if(telegramVerified)return "Your Telegram identity is verified, but your rewards account is temporarily unavailable. Tap Retry Secure Login in Profile.";
+  if(connectionIssue)return connectionIssue;
   return "ZENQORY is running in preview mode. Demo points are stored locally on this device.";
 }
 function closeModal(){$("modal-backdrop").hidden=true;}
 function clock(ms){var sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return[String(h).padStart(2,"0"),String(m).padStart(2,"0"),String(s).padStart(2,"0")].join(":");}
 function record(type,amount){state.history.unshift({type:type,amount:amount,at:Date.now()});state.history=state.history.slice(0,15);}
 async function callApi(path,method){var response=await fetch("/api"+path,{method:method||"GET",headers:{"X-Telegram-Init-Data":tg&&tg.initData?tg.initData:"","Content-Type":"application/json"}});var body;try{body=await response.json();}catch(e){throw new Error("Service returned an unexpected response");}if(!response.ok){var error=new Error(body.detail||"Request failed");error.status=response.status;throw error;}return body;}
-async function perform(path,demoAction,success){if(busy)return;busy=true;try{if(DEMO){demoAction();persist();}else{normalize(await callApi(path,"POST"));}render();notice(success);}catch(e){notice(e.message||"Something went wrong");}finally{busy=false;renderFarming();}}
+async function perform(path,demoAction,success){if(busy)return;if(!DEMO&&!accountReady){openTab("profile");notice("Reconnect Telegram before claiming rewards.");return;}busy=true;try{if(DEMO){demoAction();persist();}else{normalize(await callApi(path,"POST"));}render();notice(success);}catch(e){notice(e.message||"Something went wrong");}finally{busy=false;renderFarming();}}
 function openTab(name){if(["home","earn","friends","wallet","profile"].indexOf(name)<0)return;tab=name;document.querySelectorAll("[data-screen]").forEach(function(element){element.classList.toggle("active",element.dataset.screen===name);});document.querySelectorAll("[data-tab]").forEach(function(button){var active=button.dataset.tab===name;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");});var page=document.querySelector(".screen.active");if(page){page.scrollTop=0;}try{if(tg&&tg.HapticFeedback)tg.HapticFeedback.selectionChanged();}catch(e){}}
 function renderFarming(){var begin=state.farmStart,elapsed=begin===null?0:Math.max(0,now()-begin),progress=begin===null?0:Math.min(100,100*elapsed/FARM_MS),ready=begin!==null&&elapsed>=FARM_MS;
 $("farm-timer").textContent=begin===null?"08:00:00":ready?"00:00:00":clock(FARM_MS-elapsed);
@@ -45,26 +45,26 @@ $("protocol-progress").textContent=Math.floor(progress)+"%";
 $("protocol-cycles").textContent=fmt(state.farmCount);
 $("farm-progress").style.width=progress+"%";
 $("radial-progress").style.background="conic-gradient(#70ff8f "+(progress*3.6)+"deg,#183e26 "+(progress*3.6)+"deg)";
-var fb=$("farm-button");fb.disabled=busy||(begin!==null&&!ready);
+var fb=$("farm-button");fb.disabled=busy||(!DEMO&&!accountReady)||(begin!==null&&!ready);
 fb.innerHTML=logoIcon("i-lightning")+"<span>"+(begin===null?"START FARMING":ready?"CLAIM +80 POINTS":"FARMING IN PROGRESS")+"</span>"+logoIcon("i-arrow");
 if(DEMO&&begin!==null&&!ready){if(!demoFinish){demoFinish=document.createElement("button");demoFinish.type="button";demoFinish.className="demo-fast";demoFinish.textContent="Preview: finish this cycle";demoFinish.addEventListener("click",function(){state.farmStart=now()-FARM_MS;persist();render();notice("Cycle completed in preview — Claim is ready");});$("farm-button").after(demoFinish);}demoFinish.hidden=false;}else if(demoFinish){demoFinish.hidden=true;}
 var dailyReady=!state.lastDaily||now()-state.lastDaily>=DAILY_MS;
-$("daily-card").disabled=busy||!dailyReady;$("daily-status").textContent=dailyReady?"READY TO CLAIM":"NEXT IN "+clock(DAILY_MS-(now()-state.lastDaily));$("daily-sub").textContent=dailyReady?"Collect +20 daily points":"Already claimed this cycle";
+$("daily-card").disabled=busy||(!DEMO&&!accountReady)||!dailyReady;$("daily-status").textContent=dailyReady?"READY TO CLAIM":"NEXT IN "+clock(DAILY_MS-(now()-state.lastDaily));$("daily-sub").textContent=dailyReady?"Collect +20 daily points":"Already claimed this cycle";
 }
 function renderMissions(){var claimed=state.tasks||[],count=tasks.filter(function(t){return claimed.indexOf(t.id)!==-1;}).length,html="";
-tasks.forEach(function(t){var done=claimed.indexOf(t.id)!==-1;html+='<article class="mission-item"><span class="mission-icon">'+logoIcon(t.icon)+'</span><div class="mission-info"><strong>'+t.name+'</strong><small>'+t.desc+'</small><em>+'+t.reward+' ZNQY POINTS</em></div><button class="mission-btn" data-claim-task="'+t.id+'" '+(done?'disabled':'')+'>'+(done?"DONE ✓":"CLAIM")+'</button></article>';});
+tasks.forEach(function(t){var done=claimed.indexOf(t.id)!==-1;html+='<article class="mission-item"><span class="mission-icon">'+logoIcon(t.icon)+'</span><div class="mission-info"><strong>'+t.name+'</strong><small>'+t.desc+'</small><em>+'+t.reward+' ZNQY POINTS</em></div><button class="mission-btn" data-claim-task="'+t.id+'" '+(done||(!DEMO&&!accountReady)?'disabled':'')+'>'+(done?"DONE ✓":"CLAIM")+'</button></article>';});
 $("mission-list").innerHTML=html;$("mission-done").textContent=count;$("mission-progress").style.width=(count/tasks.length*100)+"%";$("mission-signal").textContent=count+"/"+tasks.length+" COMPLETE";$("earn-done").textContent=count+"/"+tasks.length;$("quick-tasks").textContent=count+" / "+tasks.length+" COMPLETED";$("earn-farm").textContent=fmt(state.farmCount);$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";}
 function renderActivity(){var entries=state.history||[];var box=$("activity-list");if(!entries.length){box.innerHTML='<div class="activity-empty">No transactions yet. Start farming to create your first reward activity. Your points are not on-chain tokens.</div>';return;}box.innerHTML=entries.slice(0,8).map(function(row){var label=String(row.type||"Reward").replace(/[<>]/g,""),amount=fmt(row.amount);return '<div class="activity-item">'+logoIcon("i-gift")+'<span>'+label+'</span><strong>+'+amount+' PTS</strong></div>';}).join("");}
 function renderCyber(){
-  $("session-status").textContent=DEMO?"LOCAL DEMO POINTS":telegramVerified?"TELEGRAM VERIFIED":"PRE-LAUNCH REWARDS";
+  $("session-status").textContent=DEMO?"LOCAL DEMO POINTS":accountReady?"TELEGRAM VERIFIED":"SECURE LOGIN REQUIRED";
   var heroChip=document.querySelector(".balance-hero .hero-mini-chip");
   if(heroChip&&heroChip.lastChild&&heroChip.lastChild.nodeType===3){
     heroChip.lastChild.nodeValue=DEMO?" LOCAL DEMO POINTS":" PRE-LAUNCH REWARDS";
   }
   $("referral-code").textContent=DEMO?"Share ZENQORY preview":(referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite");
-  $("referral-note").textContent=DEMO?"Preview invite only — no referral rewards are recorded.":"Invite friends using your Telegram Mini App link.";
+  $("referral-note").textContent=DEMO?"Preview invite only — no referral rewards are recorded.":!accountReady?"Reconnect Telegram to activate personal invitations.":"A friend counts after signing up via your link. Get 10 bonus points when they finish their first 8-hour farming cycle.";
   $("network-spectrum-count").textContent=fmt(state.refCount)+" INVITED FRIEND"+(state.refCount===1?"":"S");
-  $("profile-code").textContent=DEMO?"PREVIEW":String(state.id||"").slice(-6);
+  $("profile-code").textContent=DEMO?"PREVIEW":accountReady?String(state.id||"").slice(-6):"OFFLINE";
   var count=Math.max(0,Number(state.farmCount)||0),stage=count%5,percentage=100*stage/5;
   $("rank-goal").textContent=stage+" / 5 CYCLES";
   $("rank-fill").style.width=percentage+"%";
@@ -74,12 +74,18 @@ function renderCyber(){
   if(!entries.length){feed.innerHTML='<div class="signal-entry signal-empty">'+logoIcon("i-spark")+'<span>Your reward activity will appear here after your first claim.</span></div>';}
   else{feed.replaceChildren();entries.forEach(function(row){var el=document.createElement("div");el.className="signal-entry";var ico=document.createElement("span");ico.className="signal-entry-icon";ico.innerHTML=logoIcon("i-spark");var label=document.createElement("span");label.className="signal-entry-label";label.textContent=String(row.type||"Reward");var amount=document.createElement("strong");amount.textContent="+"+fmt(row.amount)+" PTS";el.append(ico,label,amount);feed.appendChild(el);});}
 }
-function render(){document.querySelectorAll("[data-balance]").forEach(function(node){node.textContent=fmt(state.balance);});var name=String(state.firstName||"Explorer").slice(0,55);$("profile-name").textContent=name;$("profile-initial").textContent=(name[0]||"Z").toUpperCase();$("profile-farms").textContent=fmt(state.farmCount);$("profile-friends").textContent=fmt(state.refCount);$("top-level").textContent=Math.max(1,1+Math.floor((state.farmCount||0)/5));$("profile-member").textContent=DEMO?"PREVIEW MEMBER":"TELEGRAM MEMBER #"+String(state.id).slice(-6);$("friends-total").textContent=fmt(state.refCount);$("friends-points").textContent=fmt(state.refPoints);$("quick-referrals").textContent=fmt(state.refCount)+" FRIENDS JOINED";$("referral-code").textContent=referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite";$("copy-referral").disabled=!referralLink;$("invite-button").disabled=!referralLink;renderFarming();renderMissions();renderActivity();renderCyber();}
+function render(){document.querySelectorAll("[data-balance]").forEach(function(node){node.textContent=fmt(state.balance);});var name=String(state.firstName||"Explorer").slice(0,55);$("profile-name").textContent=name;$("profile-initial").textContent=(name[0]||"Z").toUpperCase();$("profile-farms").textContent=fmt(state.farmCount);$("profile-friends").textContent=fmt(state.refCount);$("top-level").textContent=Math.max(1,1+Math.floor((state.farmCount||0)/5));$("profile-member").textContent=DEMO?"PREVIEW MEMBER":accountReady?"TELEGRAM MEMBER #"+String(state.id).slice(-6):"SECURE LOGIN REQUIRED";$("friends-total").textContent=fmt(state.refCount);$("friends-active").textContent=fmt(state.activeRefCount||0);$("friends-points").textContent=fmt(state.refPoints);$("quick-referrals").textContent=fmt(state.refCount)+" FRIENDS JOINED";$("referral-code").textContent=referralLink?referralLink.replace(/^https?:\/\/t\.me\//,""):"Connect Telegram to invite";$("copy-referral").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-button").disabled=!referralLink||(!DEMO&&!accountReady);$("invite-bot-button").disabled=!referralBotLink||!accountReady;$("connection-card").hidden=DEMO||accountReady;$("connection-help").textContent=connectionSummary();renderFarming();renderMissions();renderActivity();renderCyber();}
 async function startOrClaim(){if(state.farmStart===null){await perform("/farm/start",function(){state.farmStart=now();},"Farming activated. Your 8-hour cycle has started.");}else if(now()-state.farmStart>=FARM_MS){await perform("/farm/claim",function(){state.farmStart=null;state.farmCount+=1;state.balance+=80;record("Farming reward",80);},"Success! You claimed 80 ZENQORY points.");}}
 function claimDaily(){if(state.lastDaily&&now()-state.lastDaily<DAILY_MS)return;perform("/daily",function(){state.lastDaily=now();state.balance+=20;record("Daily reward",20);},"+20 points added to your rewards balance");}
 function claimTask(id){var task=tasks.find(function(t){return t.id===id;});if(!task||state.tasks.indexOf(id)!==-1)return;if(id==="safety"){modal("Rewards are not cryptocurrency","ZENQORY points are pre-launch, off-chain loyalty rewards. They cannot currently be sold, withdrawn or exchanged, and have no guaranteed future value. This learning mission provides an educational points reward.");}
 perform("/tasks/"+id,function(){state.tasks.push(id);state.balance+=task.reward;record(task.name,task.reward);},"Mission complete! +"+task.reward+" points");}
 function share(){if(!referralLink){modal("Open inside Telegram","Your personal invite link appears after opening ZENQORY through your official Telegram Mini App.");return;}if(DEMO)notice("Preview share: bonuses are not tracked yet.");var uri="https://t.me/share/url?url="+encodeURIComponent(referralLink)+"&text="+encodeURIComponent("Join ZENQORY — an early digital rewards community.");try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}catch(e){window.open(uri,"_blank","noopener,noreferrer");}}
+function shareBotInvite(){
+  if(!accountReady||!referralBotLink)return;
+  var uri="https://t.me/share/url?url="+encodeURIComponent(referralBotLink)+"&text="+encodeURIComponent("Join me on ZENQORY! Tap Start, then Launch ZENQORY to begin farming points.");
+  try{if(tg&&tg.openTelegramLink)tg.openTelegramLink(uri);else window.open(uri,"_blank","noopener,noreferrer");}
+  catch(e){window.open(uri,"_blank","noopener,noreferrer");}
+}
 async function copyReferral(){if(!referralLink)return;try{await navigator.clipboard.writeText(referralLink);notice("Invite link copied");}catch(e){modal("Your invite link",referralLink);}}
 function showInfo(kind){var info={
 notification:["Notifications","Farming reminders and major ecosystem updates will appear here as we develop the official Telegram bot."],
@@ -93,59 +99,49 @@ withdraw:["Withdrawals Not Available","ZENQORY points currently have no cash val
 };var item=info[kind]||info.support;modal(item[0],kind==="account"?connectionSummary():item[1]);}
 $("farm-button").addEventListener("click",startOrClaim);$("daily-card").addEventListener("click",claimDaily);$("mission-list").addEventListener("click",function(event){var btn=event.target.closest("[data-claim-task]");if(btn)claimTask(btn.getAttribute("data-claim-task"));});
 document.querySelectorAll("[data-tab]").forEach(function(button){button.addEventListener("click",function(){openTab(button.dataset.tab);});});document.querySelectorAll("[data-go]").forEach(function(node){node.addEventListener("click",function(){openTab(node.dataset.go);});node.addEventListener("keydown",function(e){if(e.key==="Enter")openTab(node.dataset.go);});});
-$("avatar-button").addEventListener("click",function(){openTab("profile");});$("settings-button").addEventListener("click",function(){openTab("profile");});$("notification-button").addEventListener("click",function(){showInfo("notification");});$("copy-referral").addEventListener("click",copyReferral);$("invite-button").addEventListener("click",share);
+$("avatar-button").addEventListener("click",function(){openTab("profile");});$("settings-button").addEventListener("click",function(){openTab("profile");});$("notification-button").addEventListener("click",function(){showInfo("notification");});$("copy-referral").addEventListener("click",copyReferral);$("invite-button").addEventListener("click",share);$("invite-bot-button").addEventListener("click",shareBotInvite);
 $("wallet-connect").addEventListener("click",function(){showInfo("wallet");});$("wallet-withdraw").addEventListener("click",function(){showInfo("withdraw");});
 ["account","notifications","security","language","support"].forEach(function(item){var btn=$(item+"-setting");if(btn)btn.addEventListener("click",function(){showInfo(item==="notifications"?"notification":item);});});
 $("modal-close").addEventListener("click",closeModal);$("modal-ok").addEventListener("click",closeModal);$("modal-backdrop").addEventListener("click",function(e){if(e.target===$("modal-backdrop"))closeModal();});document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
+function setConnectionProblem(error){
+  accountReady=false;
+  var message=String(error&&error.message||"");
+  var description=/expired/i.test(message)
+    ?"Telegram login expired. Close the Mini App and reopen it from the official ZENQORY bot."
+    :/authentication|signature/i.test(message)
+    ?"Telegram could not verify your session. Reopen the official bot and confirm BOT_TOKEN belongs to this bot."
+    :error&&error.status===503
+    ?"Secure reward storage is unavailable. Please try again shortly."
+    :"The secure rewards service is temporarily unavailable. Retry your Telegram connection.";
+  sessionGuide("Secure login",description);
+  busy=false;render();
+}
+async function loginTelegram(){
+  if(DEMO)return;
+  if(!tg||!tg.initData){setConnectionProblem(new Error("Missing Telegram initData"));return;}
+  busy=true;render();
+  try{
+    var verified=await callApi("/telegram/verify","POST");
+    telegramVerified=true;
+    if(verified&&verified.first_name)state.firstName=String(verified.first_name).slice(0,60);
+    var snapshot=await callApi("/me","GET");
+    normalize(snapshot);accountReady=true;DEMO=false;hideSessionGuide();busy=false;render();
+    notice("Your secure Telegram rewards account is connected.");
+  }catch(error){setConnectionProblem(error);}
+}
+$("retry-login").addEventListener("click",loginTelegram);
 if(DEMO){
   loadPreview();
-  sessionGuide("Interactive preview","The preview is for testing only; launch the official Telegram Mini App for a real authenticated session.");
-}
-else{
+  sessionGuide("Interactive preview","This browser shows local demo points only. Open the official ZENQORY Telegram Mini App for a secure rewards account.");
+}else{
   if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
-  busy=true;render();
-  // Retrieve the bot's verified Telegram username, without exposing any token.
-  fetch("/api/telegram/status",{method:"GET",cache:"no-store"}).then(function(response){
-    if(!response.ok)throw new Error("Bot status is unavailable");
-    return response.json();
+  fetch("/api/telegram/status",{method:"GET",cache:"no-store"}).then(function(r){
+    if(!r.ok)throw new Error("Bot status unavailable");return r.json();
   }).then(function(info){
     botReady=info.setup==="ready";
-    if(typeof info.bot_username==="string"&&/^[A-Za-z0-9_]{5,32}$/.test(info.bot_username)){
-      botUsername=info.bot_username;
-    }
-    renderCyber();
-  }).catch(function(){/* The web app remains usable in preview mode. */});
-
-  // Verify the signed Telegram launch independently from the database.
-  callApi("/telegram/verify","POST").then(function(session){
-    telegramVerified=true;
-    if(session&&session.first_name)state.firstName=String(session.first_name).slice(0,60);
-    // Reaching this point proves the Telegram signature; a 503 below now
-    // only means the rewards storage is not provisioned.
-    return callApi("/me","GET").then(function(payload){
-      busy=false;normalize(payload);DEMO=false;hideSessionGuide();render();
-      notice("Telegram session verified. Your rewards account is connected.");
-    }).catch(function(error){
-      busy=false;loadPreview();
-      sessionGuide("Telegram connected • Preview rewards",
-        "Your Telegram identity is verified. The database is not connected yet, so farming and claims currently use local demo points only.");
-      notice("Telegram verified. Demo rewards are ready to test.");
-    });
-  }).catch(function(error){
-    busy=false;loadPreview();
-    var detail=String(error.message||"");
-    var expired=/expired/i.test(detail);
-    var tokenMismatch=/authentication|signature/i.test(detail);
-    var description=expired
-      ?"Your Telegram session has expired. Close this Mini App and launch it again from the official bot."
-      :tokenMismatch
-      ?"Telegram could not validate this session with the bot token configured on Vercel. Open the official bot below. If the issue remains, make sure BOT_TOKEN belongs to this exact bot."
-      :error.status===503
-      ?"Telegram bot credentials are unavailable on the server. Check the BOT_TOKEN production environment variable in Vercel."
-      :"The Telegram session could not be verified right now. Reopen ZENQORY from the official bot; local demo mode remains available.";
-    sessionGuide("Telegram connection",description);
-    // No toast or banner: connection details are available via Profile > Account.
-  });
+    if(typeof info.bot_username==="string"&&/^[A-Za-z0-9_]{5,32}$/.test(info.bot_username))botUsername=info.bot_username;
+  }).catch(function(){/* Informational; no influence on signed reward access. */});
+  loginTelegram();
 }
 setInterval(function(){renderFarming();if(tab==="earn")$("earn-daily").textContent=(!state.lastDaily||now()-state.lastDaily>=DAILY_MS)?"READY":"CLAIMED";},1000);
 })();
