@@ -727,3 +727,74 @@ body{padding:0!important}
 .mission-channel-link{display:inline-flex;align-self:flex-start;color:#a0ffac;font:800 10px var(--display);text-decoration:underline;text-underline-offset:4px;padding:5px 0}
 .mission-empty{padding:15px;text-align:center;color:#adc2b2;font-size:12px}
 @media(min-width:600px){.admin-form-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-form-grid .admin-field:first-child{grid-column:auto}.admin-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+
+/* ZENQORY smooth-launch anti-flicker: never display placeholder balances
+   before the Telegram account has been verified and rendered. */
+.zen-launch-screen{
+  position:fixed;inset:0;z-index:9999;display:flex;align-items:center;
+  justify-content:center;flex-direction:column;overflow:hidden;padding:32px 25px;
+  background:#030806;color:#edfff1;text-align:center;
+  opacity:1;visibility:visible;pointer-events:auto
+}
+.zen-launch-screen:before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 230px 190px at 50% 43%,rgba(30,115,63,.17),transparent 80%),
+   linear-gradient(180deg,#030806,#06130b 54%,#030806);
+}
+.zen-launch-panel{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;width:100%;max-width:340px}
+.zen-launch-mark{
+  display:grid;place-items:center;width:94px;height:94px;border:1.5px solid #69f18b;
+  border-radius:25px;background:linear-gradient(140deg,#123824,#06160d);
+  box-shadow:0 0 0 5px rgba(99,238,133,.05),0 0 40px rgba(53,215,103,.13)
+}
+.zen-launch-mark span{font:900 italic 63px var(--display);line-height:1;color:#abffbd;text-shadow:0 0 12px rgba(60,255,115,.35)}
+.zen-launch-wordmark{margin-top:23px;font:800 25px var(--display);letter-spacing:4px;color:#effff0}
+.zen-launch-tagline{margin-top:5px;font:600 9px var(--display);letter-spacing:2.6px;color:#8ab49a}
+.zen-launch-divider{margin:30px 0 16px;width:116px;height:2px;border-radius:3px;background:#1d412a;overflow:hidden}
+.zen-launch-divider span{display:block;width:54%;height:100%;background:linear-gradient(90deg,transparent,#81ff9a,transparent);margin:0 auto}
+.zen-launch-label{margin:0;font:800 10px var(--display);letter-spacing:1.7px;color:#bfffc7}
+.zen-launch-detail{font:500 11px var(--font);color:#809b86;line-height:1.6;margin:9px 0 0}
+.zen-launch-footer{position:absolute;bottom:calc(35px + env(safe-area-inset-bottom));font:700 8px var(--display);letter-spacing:1.5px;color:#668575}
+.zen-launch-footer span{color:#4eb574;margin:0 7px}
+body.zen-loading{overflow:hidden}
+body.zen-loading .app-shell{visibility:hidden!important;pointer-events:none!important}
+body.zen-ready{overflow:auto}
+body.zen-ready .app-shell{visibility:visible!important}
+body.zen-ready .zen-launch-screen{
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .16s ease-out,visibility 0s linear .16s
+}
+/* Stop double entrance animations and reflow of every card on tab switches.
+   Premium neon artwork remains, but the content is immediately readable. */
+.screen,.screen.active,
+.screen.active>.hero,.screen.active>.farm-card,.screen.active>.page-heading,
+.screen.active>.profile-cover,.screen.active>.admin-hero,
+.screen.active .quick-card,.screen.active .mission-item,.screen.active .setting-item,
+.screen.active .wallet-action,.network-person{animation:none!important;animation-delay:0s!important}
+.screen.active,.screen.active>.hero,.screen.active>.farm-card,
+.screen.active>.page-heading,.screen.active>.profile-cover{opacity:1!important;transform:none!important}
+.app-shell{overflow-anchor:none}
+@media(max-width:680px){
+  /* Android Telegram WebView: many perpetual GPU effects can cause flashing,
+     dropped frames, and brief green-tinted paint artifacts. Keep a still
+     composition instead of running dozens of filters and transforms. */
+  .app-shell:after,.ambient-grid,.hero:before,.orb-scene,.coin-3d,
+  .coin-3d span,.orbit-a,.orbit-b,.shard,.radial-progress,
+  .radial-progress:after,.action-main:before,.nav-item.active svg,
+  .network-art,.network-art i,.network-avatar,.network-connectors span,
+  .network-spectrum-lines span,.signal-wave i,.wallet-hero .orb-mini,
+  .large-avatar,.cyber-v3 .zen-ambient-core i,
+  .cyber-v3 .zen-hero-sweep,.cyber-v3 .zen-holo-arc,
+  .cyber-v3 .zen-spark,.cyber-v3 .zen-reactor-orbit,
+  .cyber-v3 .zen-reactor-track,.cyber-v3 .zen-reactor-node,
+  .cyber-v3 .zen-mission-target i,.cyber-v3 .zen-network-hologram i,
+  .cyber-v3 .zen-vault-ring,.cyber-v3 .zen-profile-field span,
+  .live-point,.telemetry-blip,.progress-fill:after{
+    animation:none!important;filter:none!important;
+  }
+  .bottom-nav{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+}
+@media(prefers-reduced-motion:reduce){
+  body.zen-ready .zen-launch-screen{transition:none!important}
+}
