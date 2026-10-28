@@ -160,7 +160,7 @@ function safeAvatarURL(value){
 function placeAvatar(element,photo,name){
   if(!element)return;
   var url=safeAvatarURL(photo),initial=(String(name||"Z").trim().charAt(0)||"Z").toUpperCase();
-  if(element.dataset.avatarSource===url&&element.dataset.avatarInitial===initial)return;
+  if(element.dataset.avatarSource===url&&element.dataset.avatarInitial===initial&&(!url||element.querySelector("img")))return;
   element.dataset.avatarSource=url;
   element.dataset.avatarInitial=initial;
   element.textContent=initial;
@@ -425,7 +425,7 @@ language:["Language Settings","English is the active language for all ZENQORY sc
 support:["How ZENQORY Works","Start an 8-hour farming cycle, then claim your reward. Each active referred friend unlocks +2% mining boost for future cycles (maximum +20%). A friend is active after a real first farm claim. Missions pay once only after their requirements are verified on our server."],
 wallet:["TON Wallet — Coming Later","This release tracks off-chain reward points. TON Connect, deposits, withdrawals and token claims are disabled until secure implementation and review."],
 withdraw:["Withdrawals Not Available","ZENQORY points currently have no cash value or withdrawal route. A token launch or exchange listing has not been promised."]
-};var item=info[kind]||info.support;modal(item[0],kind==="account"?connectionSummary():item[1]);}
+};var item=info[kind]||info.support;modal(item[0],kind==="account"?(connectionSummary()+(accountReady?" Your Telegram ID: "+String(state.id):"")):item[1]);}
 $("farm-button").addEventListener("click",startOrClaim);$("daily-card").addEventListener("click",claimDaily);$("mission-list").addEventListener("click",function(event){var btn=event.target.closest("[data-claim-task]");if(btn)claimTask(btn.getAttribute("data-claim-task"));});
 document.querySelectorAll("[data-tab]").forEach(function(button){button.addEventListener("click",function(){openTab(button.dataset.tab);});});document.querySelectorAll("[data-go]").forEach(function(node){node.addEventListener("click",function(){openTab(node.dataset.go);});node.addEventListener("keydown",function(e){if(e.key==="Enter")openTab(node.dataset.go);});});
 $("avatar-button").addEventListener("click",function(){openTab("profile");});$("settings-button").addEventListener("click",function(){openTab("profile");});$("notification-button").addEventListener("click",function(){showInfo("notification");});$("copy-referral").addEventListener("click",copyReferral);$("invite-button").addEventListener("click",share);$("invite-bot-button").addEventListener("click",shareBotInvite);
