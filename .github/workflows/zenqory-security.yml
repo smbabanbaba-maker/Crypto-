@@ -1,0 +1,47 @@
+name: ZENQORY Security and Referral Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  security-and-rewards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: zenqory_test
+          POSTGRES_USER: zenqory_test
+          POSTGRES_PASSWORD: test-only-ephemeral-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zenqory_test -d zenqory_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # Only disposable CI credentials: never use production Telegram/Neon secrets.
+      DATABASE_URL: postgresql://zenqory_test:test-only-ephemeral-password@localhost:5432/zenqory_test
+      BOT_TOKEN: 123456789:local-fixture-not-a-real-telegram-secret
+      BOT_USERNAME: ZenqoryTestBot
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@11bd71901bbe5b163ce3da186d0f3a3a6a4fced # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install isolated Python dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt "httpx>=0.27,<1"
+      - name: Frontend syntax
+        run: node --check public/app.js
+      - name: Telegram authentication and transactional reward tests
+        run: .venv/bin/python -m unittest discover -s tests -v
