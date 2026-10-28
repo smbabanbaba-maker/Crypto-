@@ -135,9 +135,8 @@ if(DEMO){
   sessionGuide("Interactive preview","This browser shows local demo points only. Open the official ZENQORY Telegram Mini App for a secure rewards account.");
 }else{
   if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user)state.firstName=tg.initDataUnsafe.user.first_name||"Explorer";
-  fetch("/api/telegram/status",{method:"GET",cache:"no-store"}).then(function(r){
-    if(!r.ok)throw new Error("Bot status unavailable");return r.json();
-  }).then(function(info){
+  callApi("/telegram/status","GET").then(function(info){
+
     botReady=info.setup==="ready";
     if(typeof info.bot_username==="string"&&/^[A-Za-z0-9_]{5,32}$/.test(info.bot_username))botUsername=info.bot_username;
   }).catch(function(){/* Informational; no influence on signed reward access. */});
